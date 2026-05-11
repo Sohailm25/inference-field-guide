@@ -1,0 +1,122 @@
+# ABOUTME: Seven-Gate Scorecard for evaluating inference providers.
+# ABOUTME: Score each provider 1-5 per gate, weight by workload priority.
+#
+# Instructions:
+# 1. Set your weights (must sum to 1.0) based on workload priorities
+# 2. Score each provider 1-5 on each gate using YOUR data, not vendor claims
+# 3. Weighted score = sum(score * weight) across all gates
+#
+# Scoring guide:
+#   1 = Unacceptable  2 = Below threshold  3 = Meets requirements
+#   4 = Exceeds requirements  5 = Best in class
+
+weights:
+  latency: 0.20
+  reliability: 0.20
+  quality: 0.15
+  structured_output: 0.10
+  tco: 0.15
+  operability: 0.10
+  contract_fit: 0.10
+
+gates:
+  latency:
+    description: "End-to-end latency under production load"
+    metrics:
+      - "TTFT p95 (ms)"
+      - "ITL p95 (ms)"
+      - "Full output p95 (ms)"
+    why: "Prevents demo-only p50 wins. p95 is the user-visible metric."
+    red_flags:
+      - "Vendor only reports p50 or median"
+      - "Benchmarks on synthetic workloads with uniform sequence lengths"
+      - "No cold-start latency disclosed for scale-to-zero"
+
+  reliability:
+    description: "Request success rate under sustained production traffic"
+    metrics:
+      - "5xx error rate (%)"
+      - "429 rate-limit rate (%)"
+      - "Effective retry rate (%)"
+      - "Availability over 30 days (%)"
+    why: "Token price is irrelevant if retry cost dominates."
+    red_flags:
+      - "No public status page"
+      - "SLA credits capped at monthly fee (doesn't cover your revenue loss)"
+      - "No incident postmortems published"
+
+  quality:
+    description: "Model output quality on YOUR evaluation data"
+    metrics:
+      - "Task eval pass rate on your data (%)"
+      - "Structured output schema compliance (%)"
+      - "Regression rate between model versions (%)"
+    why: "Avoids benchmark theater. Only your evals on your data matter."
+    red_flags:
+      - "Quality claims based on public benchmarks only"
+      - "No versioning or pinning for model updates"
+      - "Quantization without disclosed quality impact"
+
+  structured_output:
+    description: "Reliability of JSON/schema-constrained generation"
+    metrics:
+      - "Schema-valid response rate (%)"
+      - "Constrained decoding support (native vs. retry)"
+      - "Function calling reliability (%)"
+    why: "JSON mode varies dramatically across providers and models."
+    red_flags:
+      - "No native constrained decoding (relies on retry)"
+      - "Schema support limited to simple types"
+
+  tco:
+    description: "Loaded Cost Per Request (LCPR) — not just token price"
+    metrics:
+      - "LCPR at current volume ($/request)"
+      - "LCPR at 3x volume projection ($/request)"
+      - "Engineering hours/month for inference operations"
+      - "Observability cost as % of compute"
+    why: "Normalizes unit price + failure cost + engineering burden."
+    red_flags:
+      - "Per-token price looks great but retry rate is high"
+      - "No batch or caching discounts"
+      - "Hidden egress fees at scale"
+
+  operability:
+    description: "Day-2 operational burden and team dependency"
+    metrics:
+      - "Named owner for inference stack (yes/no)"
+      - "Rollback time for model updates (minutes)"
+      - "Monitoring/alerting maturity (1-5)"
+      - "Incident response SLA (minutes)"
+    why: "Prevents FDE-only maintenance risk. Stack must be operable by the team."
+    red_flags:
+      - "Only one person understands the deployment"
+      - "No rollback procedure documented"
+      - "Monitoring requires custom integration"
+
+  contract_fit:
+    description: "Commercial terms alignment with your business"
+    metrics:
+      - "Commit structure (pay-as-you-go / reserved / annual)"
+      - "Overage pricing (% above committed rate)"
+      - "Rollover policy for unused capacity"
+      - "Fine-tuning IP ownership"
+      - "Data retention default"
+    why: "Bake-off wins that can't become production contracts waste everyone's time."
+    red_flags:
+      - "Cannot export fine-tuned model weights"
+      - "Data retained by default with no opt-out"
+      - "No volume discount below $100K/year commit"
+      - "Indemnification excludes model outputs"
+
+# Template: fill in for each provider you evaluate
+provider_scores:
+  example_provider:
+    latency: null
+    reliability: null
+    quality: null
+    structured_output: null
+    tco: null
+    operability: null
+    contract_fit: null
+    notes: ""

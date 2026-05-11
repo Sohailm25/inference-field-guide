@@ -1,0 +1,119 @@
+# ABOUTME: Pre-filled vendor comparison data for major inference providers.
+# ABOUTME: Data from public sources as of May 2026. Verify before contracting.
+#
+# Evidence tags: [PUBLIC] [REPORTED] [MODELED]
+
+providers:
+  together_ai:
+    name: "Together AI"
+    founded: 2022
+    latest_funding: "$305M Series B at $3.3B valuation (Feb 2025)" # [PUBLIC]
+    estimated_arr: "$150M (Sacra, late 2025)" # [REPORTED]
+
+    strengths:
+      - "Research depth: Tri Dao (FlashAttention), Mamba, TKC kernels" # [PUBLIC]
+      - "ATLAS adaptive speculation: up to 500 TPS on DeepSeek-V3.1" # [PUBLIC]
+      - "Broad model catalog: serverless + fine-tuning + dedicated on one platform" # [PUBLIC]
+      - "36,000 GB200 NVL72 GPUs with Hypertec" # [PUBLIC]
+      - "CodeSandbox acquisition: built-in code interpretation" # [PUBLIC]
+
+    weaknesses:
+      - "Data stored by default unless disabled in settings (opt-out)" # [PUBLIC]
+      - "Serverless latency on some models trails Fireworks' curated optimization" # [REPORTED]
+
+    ideal_for:
+      - "Teams wanting serverless + fine-tuning + dedicated on one platform"
+      - "Workloads benefiting from adaptive speculation (ATLAS)"
+      - "Research-oriented teams valuing kernel-level innovation"
+
+    compliance: "SOC 2 Type II, HIPAA BAA" # [PUBLIC]
+
+  fireworks_ai:
+    name: "Fireworks AI"
+    founded: 2022
+    latest_funding: "$250M Series C at $4B valuation (Oct 2025)" # [PUBLIC]
+    estimated_arr: "$315M (Sacra, Feb 2026)" # [REPORTED]
+
+    strengths:
+      - "Latency optimization: FireAttention, FireOptimizer (RL post-training)" # [PUBLIC]
+      - "Multi-LoRA: hundreds of adapters at single-model cost ($0.20/M for 8B)" # [PUBLIC]
+      - "AMD support: MI300X production deployments (Character.AI via partnership)" # [PUBLIC]
+      - "Cursor reference: Fast Apply + Cursor Tab + Composer 2 RL inference" # [PUBLIC]
+      - "Acquired Hathora for real-time orchestration (March 2026)" # [PUBLIC]
+      - "10T+ tokens/day scale" # [PUBLIC]
+
+    weaknesses:
+      - "Curated model catalog (fewer models than Together's breadth)" # [REPORTED]
+      - "Response API retains 30 days unless store=false" # [PUBLIC]
+      - "~50% gross margin (Sacra) — lower than typical SaaS" # [REPORTED]
+
+    ideal_for:
+      - "Latency-critical agentic and coding workloads"
+      - "Multi-LoRA at scale (contact center, per-customer fine-tunes)"
+      - "Teams with RL training → serving pipeline needs"
+
+    compliance: "SOC 2 Type II, HIPAA BAA" # [PUBLIC]
+
+  baseten:
+    name: "Baseten"
+    founded: 2019
+    latest_funding: "$300M Series E at $5B valuation (Jan 2026)" # [PUBLIC]
+    estimated_arr: "Not disclosed; 10x revenue YoY" # [PUBLIC]
+
+    strengths:
+      - "Developer experience: Truss framework, Chains SDK" # [PUBLIC]
+      - "Observability: built-in monitoring, Abridge/OpenEvidence references" # [PUBLIC]
+      - "Zero data retention by default (cleanest privacy posture)" # [PUBLIC]
+      - "NVIDIA $150M investment; AWS Strategic Collaboration Agreement" # [PUBLIC]
+      - "Multi-cloud: AWS, GCP, Nebius regions" # [PUBLIC]
+      - "Custom Docker: TRT-LLM engines (Writer Palmyra-Med-70B reference)" # [PUBLIC]
+
+    weaknesses:
+      - "Per-replica-hour pricing ($6.50/hr H100) higher than neo-cloud bare metal" # [PUBLIC]
+      - "Acquired Parsed but training product still early" # [PUBLIC]
+      - "Operational burden for custom Truss deployments falls on customer" # [REPORTED]
+
+    ideal_for:
+      - "Healthcare/regulated workloads needing zero-retention default"
+      - "Teams wanting custom model serving with good observability"
+      - "Multi-cloud deployments across regions"
+
+    compliance: "SOC 2 Type II, HIPAA BAA" # [PUBLIC]
+
+  hyperscalers:
+    name: "AWS / GCP / Azure"
+    notes: "Bedrock, Vertex AI, Azure AI"
+
+    strengths:
+      - "Enterprise compliance: FedRAMP, ITAR, strongest key management" # [PUBLIC]
+      - "Existing enterprise relationships and procurement processes" # [PUBLIC]
+      - "Broadest geographic availability" # [PUBLIC]
+      - "Integrated with existing cloud tooling" # [PUBLIC]
+
+    weaknesses:
+      - "40-85% more expensive than neo-clouds for comparable GPU hours" # [REPORTED]
+      - "AWS hiked H200 ~15% in January 2026" # [PUBLIC]
+      - "Egress fees: $0.05-$0.09/GB (rivals compute cost at scale)" # [PUBLIC]
+      - "Slower to adopt latest open models" # [REPORTED]
+
+    ideal_for:
+      - "US Federal / FedRAMP workloads (Bedrock Government, Azure Government)"
+      - "Teams with existing enterprise agreements and credits"
+      - "Workloads requiring strongest compliance posture"
+
+  custom_silicon:
+    name: "Groq / Cerebras"
+    notes: "Custom inference hardware"
+
+    strengths:
+      - "Raw decode speed: fastest per-token generation" # [REPORTED]
+      - "Deterministic latency (no GPU contention)" # [PUBLIC]
+
+    weaknesses:
+      - "Limited model coverage" # [PUBLIC]
+      - "Vendor lock-in to proprietary hardware" # [PUBLIC]
+      - "Less flexibility for custom models or fine-tuning" # [REPORTED]
+
+    ideal_for:
+      - "Interactive workloads where raw decode speed matters most"
+      - "Demo/showcase applications"

@@ -1,0 +1,102 @@
+# ABOUTME: Migration Gate checklist — should you leave the closed API?
+# ABOUTME: Three gates must ALL pass before migrating a workload to dedicated inference.
+#
+# Instructions:
+# 1. Answer each question honestly for the specific workload you're evaluating
+# 2. All three gates must pass. If any gate fails, stay on managed/serverless.
+# 3. Re-evaluate quarterly as volumes and provider capabilities change.
+
+workload_name: ""
+evaluation_date: ""
+evaluator: ""
+
+gate_1_volume:
+  description: "Is the volume high enough to justify dedicated infrastructure?"
+  questions:
+    monthly_spend:
+      question: "What is your current monthly inference spend on this workload?"
+      value: null
+      unit: "USD/month"
+      threshold: ">$10K/month to consider serverless open-model; >$100K for dedicated"
+
+    daily_output_tokens:
+      question: "How many output tokens does this workload generate per day?"
+      value: null
+      unit: "tokens/day"
+      threshold: ">20M output tokens/day with steady traffic for dedicated"
+
+    traffic_pattern:
+      question: "Is traffic steady or bursty?"
+      value: null  # "steady" | "bursty" | "batch"
+      notes: "Bursty traffic favors serverless. Steady favors dedicated."
+
+    utilization_estimate:
+      question: "At dedicated, what GPU utilization would you achieve?"
+      value: null
+      unit: "percentage"
+      threshold: ">40% sustained. Below 40%, serverless is almost always cheaper."
+
+  gate_passes: null  # true | false
+  reasoning: ""
+
+gate_2_specialization:
+  description: "Does this workload need capabilities unavailable on serverless?"
+  questions:
+    fine_tuned_model:
+      question: "Does this workload use a fine-tuned or custom model?"
+      value: null  # true | false
+      notes: "If the model isn't available serverless, dedicated is forced."
+
+    lora_adapters:
+      question: "Does this workload need LoRA adapters not served by any provider?"
+      value: null
+
+    latency_slo:
+      question: "Is there a hard latency SLO below 500ms p95?"
+      value: null
+      target_ms: null
+      notes: "Shared APIs spike to 2-4s p99 under load on 70B models."
+
+    compliance_control:
+      question: "Are there compliance requirements (data residency, zero retention, CMEK) not met by serverless?"
+      value: null
+      details: ""
+
+    custom_quantization:
+      question: "Do you need a specific quantization (e.g., custom FP8 calibration) not available serverless?"
+      value: null
+
+  gate_passes: null
+  reasoning: ""
+
+gate_3_ownership:
+  description: "Do you have an owner who will maintain the dedicated stack?"
+  questions:
+    named_owner:
+      question: "Is there a named engineer or team responsible for inference infrastructure?"
+      value: null  # name or "none"
+      notes: "If you don't have this person, stay managed."
+
+    initial_migration_capacity:
+      question: "Can you allocate 6-10 engineer-weeks for initial migration?"
+      value: null
+
+    optimization_capacity:
+      question: "Can you allocate 4-8 additional weeks for optimization to cost crossover?"
+      value: null
+
+    ongoing_maintenance:
+      question: "Can you allocate 2-4 weeks per model-update cycle ongoing?"
+      value: null
+
+    oncall_coverage:
+      question: "Will there be on-call coverage for inference infrastructure?"
+      value: null
+
+  gate_passes: null
+  reasoning: ""
+
+overall_recommendation:
+  all_gates_pass: null  # true only if all three pass
+  recommended_action: ""  # "stay_managed" | "serverless_open" | "dedicated" | "hybrid"
+  next_review_date: ""

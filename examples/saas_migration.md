@@ -1,0 +1,63 @@
+# Worked Example: B2B SaaS Leaving OpenAI
+
+A B2B SaaS company spending $15K/month on OpenAI GPT-5.5 for customer-facing
+chat and internal document processing.
+
+## Current State
+
+- **Monthly spend**: $15,000 on OpenAI
+- **Workloads**:
+  - Customer chat: 8M output tokens/day, latency-sensitive (p95 < 2s)
+  - Document processing: 3M output tokens/day, batch-tolerant (p95 < 30s)
+  - Internal tools: 500K output tokens/day, latency-tolerant
+- **Quality requirements**: Chat must match GPT-5.5 quality. Documents can tolerate 5% quality gap.
+- **Team**: 2 ML engineers, no dedicated inference team
+
+## Analysis
+
+### Step 1: Run the Migration Gate
+
+**Gate 1 (Volume)**: $15K/month — passes threshold for serverless open-model.
+No single workload exceeds 20M tokens/day → dedicated not yet justified.
+
+**Gate 2 (Specialization)**: No fine-tuned models, no hard latency SLO,
+no compliance drivers beyond SOC 2 → does not pass for dedicated.
+
+**Gate 3 (Ownership)**: N/A — not moving to dedicated.
+
+**Verdict**: Stage 1 — add serverless open-model for document processing
+and internal tools. Keep GPT-5.5 for customer chat.
+
+### Step 2: Calculate LCPR
+
+Run `lcpr --profile saas_chat` with the calculator. Key comparison:
+
+| Mode | Provider | Model | LCPR ($/1K requests) |
+|------|----------|-------|---------------------|
+| Closed API | OpenAI | GPT-5.5 | $X.XX |
+| Serverless | Together | DeepSeek V3 | $X.XX |
+| Serverless | Fireworks | Llama 3.3 70B | $X.XX |
+
+*(Fill with actual calculator output in Phase 2)*
+
+### Step 3: Sourcing Pattern
+
+**Primary-Fallback** for chat (OpenAI primary, Anthropic fallback).
+**Workload-Segmented** for documents (Together DeepSeek V3) and internal
+tools (Together Qwen3 8B).
+
+### Step 4: Implementation
+
+1. Deploy AI gateway (LiteLLM or Helicone)
+2. Route document processing to Together DeepSeek V3 serverless
+3. Route internal tools to Together Qwen3 8B serverless
+4. Keep customer chat on GPT-5.5, add Anthropic Sonnet as fallback
+5. Enable prompt caching on Anthropic (90% input cost reduction)
+
+### Projected Savings
+
+- Document processing: ~$4,500/month → ~$375/month (DeepSeek V3 at $1.25/M)
+- Internal tools: ~$750/month → ~$50/month (Qwen3 8B at $0.20/M)
+- Chat: $9,750/month → $9,750/month (stays on GPT-5.5)
+- **Net savings: ~$4,825/month (32% reduction)**
+- **Added**: Multi-provider resilience, prompt caching on fallback path
