@@ -8,7 +8,7 @@
 | Phase 2a: Calculator Core | COMPLETE | Core engine + profiles (46 tests) |
 | Phase 2b: CLI + Verification | COMPLETE | CLI (5 commands), essay number verification, sweep output (80 tests) |
 | Phase 2c: Streamlit App | NOT STARTED | Interactive web UI |
-| Phase 3: Essay | IN PROGRESS | Parts 0-2 written (~4,600 words), Parts 3-5 remaining |
+| Phase 3: Essay | COMPLETE | Parts 0-5 written (~7,730 words), all numbers calculator-verified |
 | Phase 4: Site + Templates | NOT STARTED | Evaluation templates created |
 | Phase 5: Polish + Publish | NOT STARTED | |
 
@@ -93,8 +93,12 @@ lcpr sweep                 # Volume-vs-cost sweep (JSON for Streamlit)
 - **Part 0: The Cost Illusion** (~1,465 words) — LCPR formula, worked example table, sensitivity, observability tax
 - **Part 1: When to Leave the API** (~1,700 words) — Migration Gate Framework (Volume/Specialization/Ownership), worked example (B2B SaaS at $18K/month), break-even math, when NOT to migrate
 - **Part 2: The Multi-Source Architecture** (~1,430 words) — Four patterns (Workload-Segmented, Capability-Arbitrage, Primary-Fallback, Geo-Segmented), named examples, complexity tax, routing layer levels
+- **Part 3: What to Build vs What to Buy** (~1,100 words) — Seven-layer Inference Stack Map with recommendation per layer, GPU cost comparison table
+- **Part 4: The Seven-Gate Scorecard** (~1,000 words) — Seven binary pass/fail gates for vendor evaluation
+- **Part 5: The Staged Playbook** (~1,000 words) — Four stages (Prototype → Scale → Production → Build-Side) with worked examples and revert signals
 
-### Numbers Verified Against Calculator
+### Numbers Verified Against Calculator (all exact match)
+**Part 0-2:**
 - Enterprise profile (800K req, 1000/500 tokens, 5% retry, 92% QG): GPT-5.5 LCPR=$0.0246 ($18,128/mo)
 - Together DeepSeek V3: LCPR=$0.0039 ($2,903/mo) — 6.2x cheaper
 - Migration savings: $15,225/month, payback 3.2 months at $48K migration cost
@@ -104,6 +108,14 @@ lcpr sweep                 # Volume-vs-cost sweep (JSON for Streamlit)
 - Multi-LoRA 26.6x LCPR advantage over GPT-5.5 at 10M req/month
 - GPT-5.5 Mini cheaper than Together for short-output voice workloads
 
+**Part 3-5:**
+- GPU monthly costs: Lambda $2,153, RunPod $3,175, AWS $3,582, CoreWeave $4,435, Baseten $4,680
+- Lambda vs AWS: 40% savings; Lambda vs Baseten: 54% savings
+- Stage 0 (200K req): GPT-5.5 $3,706/mo, savings $2,987/mo
+- Stage 1 (2M req): all-GPT $35,020, 70/30 split $26,372, savings $8,648/mo ($103,776/yr)
+- Stage 2 (10M req): GPT-5.5 $169,300, Together $19,950, Lambda 40% $10,958, Lambda 60% $8,806
+
 ## Next Actions
-1. Phase 3: Write Parts 3-5 (Build vs Buy, Seven-Gate Scorecard, Staged Playbook)
-2. Phase 2c: Streamlit app (can be done in parallel or after essay)
+1. Phase 2c: Streamlit app (interactive web UI for LCPR calculator)
+2. Phase 4: Site scaffolding + evaluation templates
+3. Phase 5: Polish + publish

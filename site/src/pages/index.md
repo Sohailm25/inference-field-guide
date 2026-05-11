@@ -279,4 +279,271 @@ Each step is independently valuable. You don't need to reach step 5 to benefit f
 
 ---
 
-*Part 3: What to Build vs. What to Buy →*
+## Part 3: What to Build vs. What to Buy
+
+Inference is not one decision. It's a stack of seven decisions, and most teams make the wrong call at least twice because they treat the stack as monolithic.
+
+The mistake is building at a layer where a commodity solution exists, or buying at a layer where the vendor's opinion doesn't match your workload. This section maps each layer and gives a recommendation.
+
+### The Inference Stack Map
+
+**Layer 1: AI Gateway.** *Recommendation: Buy.*
+
+The gateway sits between your application and your inference providers. It handles routing, retries, rate limiting, and basic observability. The build case is almost never compelling because the open-source options are mature and free.
+
+- **LiteLLM** (Python): broadest provider support, 100+ providers. Struggles past ~2,000 RPS per instance. Right for development and moderate production workloads.
+- **Helicone** (Rust, Apache 2.0): ~50ms overhead, strongest combined observability + routing. Production users handling 5,000+ RPS [REPORTED].
+- **Portkey**: enterprise control plane. Processes 2.5T+ tokens across 650+ organizations per their self-reporting. HIPAA BAA available.
+- **Bifrost**: 11-microsecond overhead. Right for hyperscale where gateway latency matters.
+
+For most teams: LiteLLM in development, Helicone or Portkey in production. Build your own only if you have a specific technical requirement none of these meet.
+
+**Layer 2: Inference Runtime.** *Recommendation: Buy (use vLLM, SGLang, or TensorRT-LLM).*
+
+The runtime turns model weights into token predictions. The build case exists for fewer than 10 teams globally.
+
+- **vLLM**: the production default. 12,500 tok/s for Llama 3.1 8B BF16 on H100 [REPORTED]. Hardware support: NVIDIA, AMD, TPUs, Trainium, Gaudi. Continuous batching, PagedAttention, tensor parallelism. The right default unless you have a specific reason otherwise.
+- **SGLang**: ~29% higher throughput than vLLM on shared-prefix workloads via RadixAttention [REPORTED]. Pick this for chat with long shared context, agent workloads, or evaluation harnesses.
+- **TensorRT-LLM**: 15-30% higher peak throughput after a 10-30 minute compilation step. Pick this for stable models where peak performance matters. Mature FP4 support on Blackwell.
+- **TGI**: maintenance mode as of December 2025. Hugging Face now recommends vLLM or SGLang.
+
+Build a custom runtime only if you have Character.AI-level scale (1B+ queries/day) and specific architectural requirements that justify custom attention kernels and KV cache management.
+
+**Layer 3: Kernels.** *Recommendation: Buy.*
+
+FlashAttention-4 (Tri Dao, Hot Chips 2025): up to 22% faster than cuDNN attention on Blackwell [REPORTED]. Together Kernel Collection: 24% faster training operations [REPORTED]. NVIDIA cuBLAS + CUTLASS for everything else. The build case is essentially zero outside of foundation model labs.
+
+**Layer 4: Hardware.** *Recommendation: Buy from neo-clouds.*
+
+This is where the money is. Neo-cloud providers (Lambda, RunPod, CoreWeave) offer 40-54% savings versus AWS for comparable on-demand GPU hours [PUBLIC]:
+
+| Provider | GPU | $/hr | $/month |
+|----------|-----|-----:|--------:|
+| Lambda | H100 SXM | $2.99 | $2,153 |
+| RunPod | H100 SXM5 | $4.41 | $3,175 |
+| AWS | H200 (per GPU) | $4.975 | $3,582 |
+| CoreWeave | H100 SXM | $6.16 | $4,435 |
+| Baseten | H100 | $6.50 | $4,680 |
+
+Lambda at $2.99/hr is 40% cheaper than AWS and 54% cheaper than Baseten. Reserved pricing on neo-clouds adds another 15-40% discount for 1-12 month commits. AWS hiked H200 prices ~15% in January 2026, widening the gap further [PUBLIC].
+
+The caveat: hyperscalers offer services neo-clouds don't — FedRAMP authorization, managed Kubernetes at scale, integrated data pipelines, and enterprise support contracts with meaningful remedies. If you need FedRAMP, AWS Bedrock Government or Azure Government are your only options. If you don't, the neo-cloud savings are too large to ignore.
+
+**Layer 5: Orchestration.** *Recommendation: Buy NVIDIA Dynamo if multi-node.*
+
+NVIDIA Dynamo 1.0 (GA March 2026) is now the de facto disaggregation layer for multi-node inference. Named production adopters include AstraZeneca, Baseten, ByteDance, CoreWeave, Crusoe, DigitalOcean, Meituan, Pinterest, Together AI, and Vultr [PUBLIC]. It sits above vLLM, SGLang, and TensorRT-LLM and provides KV-aware routing, SLA planning, and the NIXL low-latency transfer library.
+
+For single-node deployments, plain vLLM is sufficient. You don't need Dynamo until you're running multi-GPU, multi-node inference with disaggregated prefill and decode.
+
+**Layer 6: Observability.** *Recommendation: Buy, but budget carefully.*
+
+This is where teams get burned. LLM observability costs are growing 30-50% year over year, and AI workloads generate 10-50x more telemetry than traditional services [REPORTED].
+
+- **Helicone** (bundled with gateway): free self-hosted, $20/seat/month Pro.
+- **Arize AX**: free tier (1M traces / 14 days), Pro at $50/month.
+- **Datadog GPU Monitoring**: $15-$23/host/month for infrastructure plus $31-$40/host for APM. The hidden cost is custom metrics — GenAI semantic-convention spans get billed as custom metrics, producing 40-200% bill increases [REPORTED].
+- **Grafana Cloud Pro**: $19/month base plus usage-based pricing.
+
+The honest recommendation: start with Helicone (bundled with your gateway, free). If you outgrow it, evaluate Arize before Datadog. The median Datadog bill for mid-market companies is $123K/year [REPORTED] and growing. Budget 2-4x your Year-1 observability estimate.
+
+**Layer 7: Routing Intelligence.** *Recommendation: Hold.*
+
+The routing-startup category (Martian, Not Diamond, RouteLLM, Unify, TensorZero) is not mature enough for production reliance. RouteLLM from UC Berkeley's LMSys group is the strongest open-source option. RouterArena (arXiv:2510.00202) is the first independent benchmark.
+
+Use your gateway's manual model-keyed routing for now. Revisit in 12 months when the category has consolidated.
+
+### The build-vs-buy summary
+
+| Layer | Recommendation | Build only if... |
+|-------|---------------|-----------------|
+| Gateway | Buy (LiteLLM/Helicone) | Never, unless hyper-specific caching needs |
+| Runtime | Buy (vLLM/SGLang) | 1B+ queries/day with custom arch needs |
+| Kernels | Buy | You are Tri Dao |
+| Hardware | Buy neo-cloud | You need FedRAMP → hyperscaler |
+| Orchestration | Buy Dynamo if multi-node | Single-node → skip entirely |
+| Observability | Buy (Helicone/Arize) | Don't build; budget carefully |
+| Routing | Hold | Don't build, don't buy yet |
+
+---
+
+## Part 4: The Seven-Gate Scorecard
+
+Vendor evaluation in inference has a specific problem: the features that matter most are the hardest to evaluate from public information. Pricing is transparent. Latency under load is not. Compliance certifications are public. Zero data retention defaults are buried in terms of service.
+
+The Seven-Gate Scorecard provides a structured evaluation framework. Each gate has a pass/fail criterion and a method for verification. A vendor that fails any gate should be eliminated for that workload, regardless of how well they score on the others.
+
+### Gate 1: Model Availability
+
+*Does the vendor serve the specific model(s) you need, at the precision you need?*
+
+This seems obvious, but model availability is more nuanced than checking a catalog page. Key questions:
+- Is your model available in FP8? FP4? The precision affects both quality and throughput.
+- For fine-tuned models: can you deploy custom weights, or only use the vendor's hosted versions?
+- For LoRA: does the vendor support runtime LoRA loading, or do you need a separate deployment per adapter?
+- How quickly do new models become available after release? Some vendors lag by weeks.
+
+**Verification method**: check the model catalog page, then verify the specific precision and configuration via API. Don't trust the catalog alone — models listed as "available" may be in preview or limited access.
+
+### Gate 2: Latency Under Load
+
+*What is the P50/P95/P99 latency at your expected concurrency, not on an empty endpoint?*
+
+Vendor-published latency numbers are measured on unloaded endpoints with optimal batch sizes. Production latency under shared infrastructure is 2-5x worse at P99. The only reliable latency data is either (a) your own benchmark on the vendor's infrastructure, or (b) independent benchmarks like Artificial Analysis or SemiAnalysis InferenceMAX.
+
+**Verification method**: run your actual prompts at your expected concurrency for 24 hours. Measure TTFT and inter-token latency at P50, P95, and P99. Compare against your SLO. If the vendor won't give you a trial endpoint, that's information.
+
+### Gate 3: Throughput Economics
+
+*At your volume, what is the LCPR — not the token rate?*
+
+This is the LCPR calculation from Part 0. Input the vendor's published rates, your workload profile (tokens, retry rate, quality gate, engineering hours), and compute the loaded cost. Compare across vendors at the LCPR level, not the token level.
+
+**Verification method**: use the [LCPR calculator](https://github.com/sohailm/inference-field-guide) with your actual workload numbers. The vendor's pricing page is an input to the calculation, not the answer.
+
+### Gate 4: Reliability and Failover
+
+*What is the vendor's published uptime SLA, and what are the actual remedies?*
+
+Most vendors offer 99.9% uptime with credit-based remedies. Read the credit math: most are capped at the monthly fee for the affected period, which doesn't cover your revenue loss during an outage.
+
+Key questions:
+- What's the historical uptime over the last 12 months? (Check status pages and incident histories.)
+- Does the vendor support multi-region deployment for failover?
+- What's the rate-limiting behavior under load? (Some vendors degrade gracefully; others return 429s aggressively.)
+
+**Verification method**: check the vendor's status page history. Ask for uptime data covering the last 6 months. If they can't provide it, assume 99.5% or lower.
+
+### Gate 5: Compliance and Data Handling
+
+*Does the vendor's default data handling match your requirements — not just their certifications?*
+
+SOC 2 Type II and HIPAA are table stakes — Fireworks, Baseten, Together, Modal, Nebius, and FriendliAI all have them. The differentiator is the *default* data handling behavior:
+
+- **Baseten**: zero data retention by default [PUBLIC].
+- **Fireworks**: zero retention on standard inference; Response API retains 30 days unless `store=false` [PUBLIC].
+- **Together**: data stored by default unless disabled in settings [PUBLIC].
+- **OpenAI**: fine-tuning data retained; API data retention varies by endpoint [PUBLIC].
+
+For EU data residency: Nebius (Finland, France), Scaleway, Mistral La Plateforme, OVH. For US federal: AWS Bedrock Government or Azure Government only.
+
+**Verification method**: read the terms of service and data processing agreement. Ask specifically: "If I send a request to your API and do nothing else, is the prompt or completion stored? For how long? Where?" The answer should be in writing, not verbal.
+
+### Gate 6: Integration Complexity
+
+*How many engineering hours does it take to go from zero to production with this vendor?*
+
+This covers API compatibility (OpenAI-compatible vs. custom), SDK quality, documentation completeness, structured output support, and streaming behavior. Vendors with OpenAI-compatible APIs (Together, Fireworks, DeepInfra) have lower integration cost because your existing code works with a URL change. Vendors with custom APIs (some Baseten configurations, custom runtimes) require more integration work.
+
+**Verification method**: build a proof-of-concept integration. Measure time from API key to first successful production-format request. If it takes more than a day, factor that into your migration cost estimate.
+
+### Gate 7: Pricing Trajectory
+
+*Is this vendor's pricing going up or down, and why?*
+
+This is the most forward-looking gate and the hardest to verify. The signal from April 2026 is clear: frontier closed APIs are increasing prices. Serverless open-weights providers are competing on price and have room to decrease. Dedicated GPU pricing follows hardware cycles — B200 availability in late 2026 should bring H100 prices down further.
+
+Key questions:
+- Has the vendor raised prices in the last 12 months? (OpenAI doubled GPT-5.5 rates on April 23, 2026.)
+- What's the vendor's gross margin? (Fireworks ~50% per Sacra; targeting 60%. Pure GPU resale at 50% margins is a losing position.)
+- Does the vendor have structural cost advantages (custom kernels, speculative decoding, cache pooling) that protect margins without raising prices?
+
+**Verification method**: check pricing page history via Wayback Machine. Read earnings calls or funding announcements for margin signals. Vendors with structural advantages (Together ATLAS, Fireworks FireOptimizer, LMCache integration) can hold or lower prices. Vendors without them will eventually raise prices or reduce service quality.
+
+### Using the scorecard
+
+For each vendor under consideration, score each gate as Pass, Conditional Pass (acceptable with mitigation), or Fail. Any Fail eliminates the vendor for that workload. Two or more Conditional Passes should trigger deeper evaluation.
+
+The scorecard is deliberately binary — pass/fail, not scored 1-10 — because weighted scoring systems encourage teams to rationalize a preferred vendor by assigning high weights to the gates where it excels. Binary elimination forces honest evaluation.
+
+---
+
+## Part 5: The Staged Playbook
+
+This final section synthesizes Parts 1-4 into concrete, staged guidance. Each stage has an entry threshold, a set of actions, and an exit threshold that tells you when to graduate to the next stage.
+
+### Stage 0: Prototype (under $10,000/month)
+
+**Entry**: you're building an AI-powered product and spending less than $10,000 per month on inference.
+
+**Architecture**: single closed API (OpenAI, Anthropic, or Gemini). No gateway. No fallback. No dedicated GPU.
+
+**Actions**:
+1. Pick one provider. Anthropic if you need reasoning quality and prompt caching (90% reduction on cached input tokens [PUBLIC]). OpenAI if you need the broadest ecosystem. Gemini if you need the cheapest frontier option ($1.25/$10 for ≤200K context [PUBLIC]).
+2. Use prompt caching aggressively. Anthropic's caching reduces cached input cost to 10% of base. OpenAI's automatic caching triggers on prompts ≥1,024 tokens at 50% discount [PUBLIC].
+3. Don't optimize for inference cost. At $3,700/month on GPT-5.5 for 200K requests [MODELED], the savings from switching to open-weights ($2,987/month) don't justify the engineering distraction of migration. Ship the product.
+
+**Exit threshold**: monthly inference spend exceeds $10,000, OR you experience a provider outage that costs revenue, OR a customer asks about data residency.
+
+### Stage 1: Scale ($10,000-$100,000/month)
+
+**Entry**: you've passed the Volume Gate from Part 1.
+
+**Architecture**: primary closed API + AI gateway + one or two serverless open-weights providers for specific workloads.
+
+**Actions**:
+1. Add an AI gateway (LiteLLM in dev, Helicone or Portkey in prod).
+2. Add a fallback provider for your primary closed-API model (Anthropic via Bedrock, Gemini via Vertex).
+3. Move long-tail, quality-insensitive workloads to serverless open-weights: batch processing, summarization, classification, embeddings. Together, Fireworks, or DeepInfra on Llama 3.3 70B, DeepSeek V3, or Qwen 3.
+4. Implement prompt caching everywhere it helps.
+5. Start measuring LCPR, not just token cost. The difference matters at this scale.
+
+**Worked example**: a team at 2M requests/month on GPT-5.5 spends $35,020/month [MODELED]. Splitting 70/30 — keeping 1.4M quality-sensitive requests on GPT-5.5 and moving 600K long-tail requests to Together — brings the combined bill to $26,372. That's $8,648/month in savings, or $103,776/year, with minimal engineering effort [MODELED].
+
+**Exit threshold**: any single workload exceeds ~50M output tokens/day with steady traffic, OR you need a fine-tuned model, OR you have a hard latency SLO under 500ms that shared APIs can't meet.
+
+### Stage 2: Production at Scale ($100,000-$1,000,000/month)
+
+**Entry**: you've passed the Specialization Gate or hit the dedicated GPU crossover.
+
+**Architecture**: multi-source with one or two dedicated GPU deployments for highest-volume workloads, serverless for everything else.
+
+**Actions**:
+1. Move your 1-2 highest-volume workloads to dedicated inference. Pick the vendor by case-study fit: Baseten if you need TensorRT-LLM + observability tooling (Abridge, OpenEvidence, Writer references). Fireworks if you have agentic coding or RL workloads (Cursor, Vercel v0 references). Together if you need broad model catalog + fine-tuning on one platform (Decagon reference).
+2. Run vLLM or SGLang. Use FP8 quantization for 70B-class models — quality holds within 1% of BF16 on most benchmarks [REPORTED].
+3. Run NVIDIA Dynamo if multi-node.
+4. Buy compliance certifications (SOC 2, HIPAA BAA) from your dedicated vendor.
+5. Monitor GPU utilization weekly. If consistently below 40%, move workloads back to serverless or consolidate via Multi-LoRA.
+
+**Worked example**: at 10M requests/month, GPT-5.5 costs $169,300/month. Together serverless costs $19,950. A Lambda H100 at 40% utilization costs $10,958 for that same workload — but only if utilization stays above 40% [MODELED]. At 60% utilization, the dedicated cost drops to $8,806. The dedicated option wins at this volume, but *only* if you can maintain utilization. Serverless remains the safer default.
+
+**Exit threshold**: total monthly spend exceeds $1M, OR you have a strategic reason to control kernels and models end-to-end.
+
+### Stage 3: Build-Side ($1,000,000+/month)
+
+**Entry**: you've hit a scale where the operational investment in custom infrastructure is justified by the savings.
+
+**Architecture**: dedicated inference on neo-cloud (Lambda, CoreWeave, Nebius) with vLLM/SGLang + custom optimizations. Serverless overflow path for traffic spikes.
+
+**Actions**:
+1. Hire 2-4 inference engineers. This is not optional — you cannot run dedicated inference at this scale without specialized operational expertise.
+2. Adopt LMCache or Mooncake for KV cache pooling if your traffic patterns include long shared contexts. LMCache reports 1.9-8.1x smaller TTFT and 2.3-14x higher throughput [REPORTED]. Mooncake powers Kimi K2 at 224K tokens/sec prefill on 128 H200 GPUs [REPORTED].
+3. Evaluate FP4 quantization on Blackwell with proper calibration. NVIDIA's analysis shows 1% or less accuracy degradation on key tasks [REPORTED]. FP4 on B200 doubles throughput versus FP8.
+4. Maintain a serverless overflow path. Every dedicated deployment needs this. Traffic spikes happen, GPUs fail (Meta's Llama 3 training saw 466 job interruptions over 54 days, 78% hardware-related [REPORTED]), and autoscaling dedicated GPU is measured in minutes, not milliseconds.
+5. Don't try to be Character.AI. They run custom Kaiju models on DigitalOcean AMD GPUs at 1B+ queries/day with custom int8 kernels and quantization-aware training. That's the build-side end-state. It works at their scale and represents a 33x cost reduction since 2022 [REPORTED]. Your scale is probably not their scale.
+
+### The revert signals
+
+Every stage transition should be monitored for revert signals — indicators that you've graduated too early.
+
+- **Stage 1 → Stage 0**: If your multi-source overhead (gateway maintenance, prompt migration testing, vendor management) exceeds 20% of your inference savings, simplify back to a single provider.
+- **Stage 2 → Stage 1**: If your dedicated GPU utilization stays below 40% for two consecutive months, move that workload back to serverless. The GPU costs $2,153/month whether you use it or not [MODELED].
+- **Stage 3 → Stage 2**: If your inference engineering team spends more than 50% of their time on operational issues (GPU failures, OOM errors, kernel debugging) rather than optimization, you don't have the operational maturity for build-side infrastructure yet.
+
+These revert signals are as important as the exit thresholds. The right architecture is the simplest one that meets your cost and performance requirements. Over-engineering inference is as wasteful as over-paying for it.
+
+---
+
+## Closing
+
+The frameworks in this guide — LCPR, Migration Gates, Inference Sourcing Patterns, the Stack Map, the Seven-Gate Scorecard, and the Staged Playbook — are tools for making decisions with math instead of vibes. They're opinionated, because frameworks that try to accommodate every edge case end up accommodating none.
+
+The companion [LCPR calculator](https://github.com/sohailm/inference-field-guide) lets you run these calculations against your actual workload. Every number in this essay was generated by that calculator and verified against May 2026 public pricing. When prices change — and they will — update the YAML and re-run.
+
+I work at Together AI. I've tried to write this guide as if I didn't. Where I've failed at that, the evidence tags are there so you can check my work.
+
+The best time to calculate your LCPR was six months ago. The second best time is now.
+
+---
+
+*Sohail Mohammad — May 2026*
+*[GitHub](https://github.com/sohailm/inference-field-guide) · [LCPR Calculator](https://github.com/sohailm/inference-field-guide)*
