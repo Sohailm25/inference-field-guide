@@ -5,7 +5,7 @@
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 1: Research + Scaffold | COMPLETE | All verification done, repo scaffolded |
-| Phase 2: Calculator (TDD) | NOT STARTED | Stub files created, pricing YAML populated |
+| Phase 2: Calculator (TDD) | 2a COMPLETE | Core engine + profiles done (46 tests). CLI + Streamlit remain. |
 | Phase 3: Essay | NOT STARTED | Essay stub at site/src/pages/index.md |
 | Phase 4: Site + Templates | NOT STARTED | Evaluation templates created |
 | Phase 5: Polish + Publish | NOT STARTED | |
@@ -34,7 +34,15 @@
 ## Repo Location
 `/Users/sohailmo/inference-field-guide/` (standalone repo, separate from togetherai)
 
+## Completed This Session
+1. Phase 1: Full research verification (pricing, namespace, caching, Dynamo)
+2. Phase 1: Repo scaffold (28 files, initial commit)
+3. Phase 2a: LCPR core engine (TDD — 23 tests)
+4. Phase 2a: Workload profiles (TDD — 23 additional tests, 46 total)
+
 ## Next Actions
-1. Phase 2a: Write failing tests for LCPR calculation engine
-2. Phase 2a: Implement core LCPR engine to pass tests
-3. Phase 2a: Workload profile templates with real data
+1. Phase 2b: CLI interface (click-based, `lcpr` command)
+2. Phase 2b: Crossover analysis + sensitivity analysis CLI commands
+3. Phase 2b: Run worked examples from essay — verify numbers match
+4. Phase 2c: Streamlit app (interactive web UI)
+5. Phase 3: Begin essay writing (Part 0: The Cost Illusion)
