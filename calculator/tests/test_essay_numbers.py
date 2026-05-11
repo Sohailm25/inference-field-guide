@@ -87,12 +87,12 @@ class TestEssayPart0CostIllusion:
         assert 0.002 < result.lcpr < 0.006
 
     def test_gpt55_vs_together_ratio(self, essay_workload, gpt55, together_dsv3):
-        """Essay claims open-weights is 5-30x cheaper for non-reasoning workloads.
-        Verify this specific pair shows a significant cost advantage."""
+        """Essay claims open-weights is 5-10x cheaper at LCPR level
+        (10-150x on raw token cost). Verify this pair falls in range."""
         gpt_result = compute_lcpr(essay_workload, gpt55)
         together_result = compute_lcpr(essay_workload, together_dsv3)
         ratio = gpt_result.lcpr / together_result.lcpr
-        # Should be roughly 5-10x cheaper (accounting for fixed engineering costs)
+        # LCPR ratio: 5-10x (engineering overhead compresses the raw token ratio)
         assert ratio > 3.0, f"Expected >3x ratio, got {ratio:.1f}x"
         assert ratio < 15.0, f"Unexpectedly high ratio: {ratio:.1f}x"
 
@@ -112,7 +112,8 @@ class TestEssayPart1MigrationGate:
     Essay claims:
     - Under ~$10K/month: stay on closed APIs
     - $10K-$100K/month: add serverless open for long-tail
-    - Break-even for dedicated: ~20M output tokens/day with steady traffic
+    - Break-even for dedicated: ~50M output tokens/day at full util,
+      ~130-180M at 30-40% real utilization (provider-dependent)
     """
 
     def test_low_spend_stays_closed(self, gpt55, together_dsv3):
@@ -136,19 +137,18 @@ class TestEssayPart1MigrationGate:
         assert together_result.monthly_cost < gpt_result.monthly_cost
 
     def test_break_even_daily_tokens_order_of_magnitude(self, together_dsv3, lambda_h100):
-        """Essay claims break-even at ~20M output tokens/day vs Fireworks $0.90/M.
-        Against Together at $1.25/M with Lambda at $2.99/hr, break-even should be
-        in the tens-of-millions range."""
+        """Against Together at $1.25/M with Lambda at $2.99/hr, break-even should be
+        in the hundreds-of-millions range (adjusted for utilization)."""
         result = compute_break_even(together_dsv3, lambda_h100)
         daily_tokens = result.break_even_daily_output_tokens
         # Should be in 50M-500M range (adjusted for utilization)
         assert daily_tokens > 10_000_000, f"Break-even too low: {daily_tokens:,.0f}"
         assert daily_tokens < 1_000_000_000, f"Break-even too high: {daily_tokens:,.0f}"
 
-    def test_fireworks_break_even_near_20m(self):
-        """Essay's specific claim: H100 at $2.01/hr vs Fireworks $0.90/M serverless
-        break-even is ~53.6M tokens/day at full utilization.
-        At 40% util, effective break-even is ~3x higher."""
+    def test_fireworks_break_even_at_full_util(self):
+        """H100 at $2.01/hr vs Fireworks $0.90/M serverless: break-even is
+        ~53.6M tokens/day at full utilization. At 30-40% real utilization,
+        effective break-even is 2.5-3.3x higher (~134-179M tokens/day)."""
         fireworks_70b = ProviderPricing(
             name="Fireworks Llama 70B",
             input_rate_per_m=0.90,
