@@ -115,6 +115,40 @@ lcpr sweep                 # Volume-vs-cost sweep (JSON for Streamlit)
 - Stage 1 (2M req): all-GPT $35,020, 70/30 split $26,372, savings $8,648/mo ($103,776/yr)
 - Stage 2 (10M req): GPT-5.5 $169,300, Together $19,950, Lambda 40% $10,958, Lambda 60% $8,806
 
+## Essay Audit #2 (2026-05-11)
+
+Three parallel audits (Parts 0-2 technical, Parts 3-5 technical, Together AI positioning).
+
+### Critical Fixes Applied (6)
+1. Spec decode / ATLAS contradiction reconciled — Part 0 now references ATLAS as solution
+2. "Ragged tensors" → "batch-level inefficiency" (technically precise)
+3. Decode bottleneck caveat added (only true for chat, not long-context/short-output)
+4. Dynamo non-NVIDIA hardware guidance added (AMD, Trainium, TPU)
+5. Egress cost warnings added to dedicated GPU TCO
+6. Benchmark duration 24h → 7 days minimum for P99 SLO
+
+### Together AI Positioning Fixes (4)
+1. ATLAS explained in Layer 3 (500 TPS, 2.65x speedup)
+2. 36,000 GB200 GPU deployment added in Layer 4
+3. Stage 2 vendor criteria strengthened with ATLAS/GB200/fine-tuning
+4. TKC flagged as [VENDOR CLAIM] not independent verification
+
+### Significant Technical Fixes (15)
+- LCPR formula: acknowledged omissions, migration cost range, DeepInfra clarification
+- TensorRT-LLM multi-node maturity, GPU table context, Helicone vs Arize nuance
+- Binary scorecard compensating controls, $10K threshold justification
+- 40% utilization economic reasoning, Stage 3 staffing expanded
+- KV cache pooling mechanism, data retention timestamps, Sacra flagged
+- Batch workload spot GPU, routing recommendation softened
+
+### Bias Assessment: MILD (acceptable)
+- Together shown as worse on data retention (honest)
+- Fireworks gets 4/6 case studies vs Together 1/6 (fair, reflects public evidence)
+- ATLAS + GB200 now properly surfaced (was undersold)
+- TKC vendor claim properly flagged
+
+### Word Count: ~8,710 (up from ~7,730 pre-audit)
+
 ## Next Actions
 1. Phase 2c: Streamlit app (interactive web UI for LCPR calculator)
 2. Phase 4: Site scaffolding + evaluation templates
