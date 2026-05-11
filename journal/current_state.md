@@ -8,7 +8,7 @@
 | Phase 2a: Calculator Core | COMPLETE | Core engine + profiles (46 tests) |
 | Phase 2b: CLI + Verification | COMPLETE | CLI (5 commands), essay number verification, sweep output (80 tests) |
 | Phase 2c: Streamlit App | NOT STARTED | Interactive web UI |
-| Phase 3: Essay | NOT STARTED | Essay stub at site/src/pages/index.md |
+| Phase 3: Essay | IN PROGRESS | Parts 0-2 written (~4,600 words), Parts 3-5 remaining |
 | Phase 4: Site + Templates | NOT STARTED | Evaluation templates created |
 | Phase 5: Polish + Publish | NOT STARTED | |
 
@@ -87,6 +87,23 @@ lcpr sweep                 # Volume-vs-cost sweep (JSON for Streamlit)
 - 80 tests total (46 core + 22 CLI + 12 essay verification)
 - All passing, ruff clean
 
+## Phase 3: Essay Progress (2026-05-11)
+
+### Parts Written
+- **Part 0: The Cost Illusion** (~1,465 words) — LCPR formula, worked example table, sensitivity, observability tax
+- **Part 1: When to Leave the API** (~1,700 words) — Migration Gate Framework (Volume/Specialization/Ownership), worked example (B2B SaaS at $18K/month), break-even math, when NOT to migrate
+- **Part 2: The Multi-Source Architecture** (~1,430 words) — Four patterns (Workload-Segmented, Capability-Arbitrage, Primary-Fallback, Geo-Segmented), named examples, complexity tax, routing layer levels
+
+### Numbers Verified Against Calculator
+- Enterprise profile (800K req, 1000/500 tokens, 5% retry, 92% QG): GPT-5.5 LCPR=$0.0246 ($18,128/mo)
+- Together DeepSeek V3: LCPR=$0.0039 ($2,903/mo) — 6.2x cheaper
+- Migration savings: $15,225/month, payback 3.2 months at $48K migration cost
+- Break-even Together vs Lambda (40% util): 143.5M tokens/day
+- Break-even Together vs Lambda (100% util): 57.4M tokens/day
+- Quality gate 95%→85% = 12.4% LCPR increase
+- Multi-LoRA 26.6x LCPR advantage over GPT-5.5 at 10M req/month
+- GPT-5.5 Mini cheaper than Together for short-output voice workloads
+
 ## Next Actions
-1. Phase 3: Begin essay writing (Part 0: The Cost Illusion)
+1. Phase 3: Write Parts 3-5 (Build vs Buy, Seven-Gate Scorecard, Staged Playbook)
 2. Phase 2c: Streamlit app (can be done in parallel or after essay)
