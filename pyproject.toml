@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "TCO calculator and evaluation tools for production inference architecture decisions"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Sohail Mohammad"},
 ]
@@ -39,6 +39,9 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
+[tool.setuptools.packages.find]
+include = ["calculator*"]
+
 [build-system]
 requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
