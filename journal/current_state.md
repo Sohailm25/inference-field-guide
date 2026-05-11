@@ -54,6 +54,32 @@ lcpr sensitivity           # Vary one parameter, see LCPR impact
 lcpr sweep                 # Volume-vs-cost sweep (JSON for Streamlit)
 ```
 
+## Second-Pass Audit (2026-05-11)
+
+### Claims Corrected
+- **Break-even threshold**: Was "~20M output tokens/day" — corrected to ~53.6M at
+  full util, ~134-179M at 30-40% real utilization. Original number from earlier
+  draft with different pricing assumptions.
+- **Cost ratio**: Was "5-30x cheaper" — narrowed to "5-10x at LCPR level"
+  (engineering overhead compresses raw token ratio). Raw token ratio is 10-150x.
+- **Utilization multiplier**: Was "~3x" — documented as 2.5x at 40% util,
+  3.3x at 30% util. "~3x" is midpoint of the range.
+
+### Evidence Tags Fixed
+- GPT-5.5 Mini ($0.30/$1.50): changed from [PUBLIC] to [MODELED]
+- Baseten Model API ($0.88): changed from [PUBLIC] to [MODELED]
+- Throughput notes: removed inaccurate "Clarifai validation" citation
+
+### Research File Updated
+- additional_research.md: Fireworks V4 corrected to $1.74/$3.48, Lambda to $2.99
+- additional_research.md: "5-30x" claim narrowed to "5-10x at LCPR level"
+
+### False Positives Dismissed
+- "Dedicated GPU ignores input tokens" — correct behavior; GPU throughput is
+  bottlenecked by decode phase (output), not prefill (input)
+- "Break-even ignores input tokens" — conservative simplification, biased
+  toward staying serverless (the safer recommendation)
+
 ## Repo Location
 `/Users/sohailmo/inference-field-guide/` (standalone repo, separate from togetherai)
 
@@ -62,5 +88,5 @@ lcpr sweep                 # Volume-vs-cost sweep (JSON for Streamlit)
 - All passing, ruff clean
 
 ## Next Actions
-1. Phase 2c: Streamlit app (interactive web UI, charts from sweep data)
-2. Phase 3: Begin essay writing (Part 0: The Cost Illusion)
+1. Phase 3: Begin essay writing (Part 0: The Cost Illusion)
+2. Phase 2c: Streamlit app (can be done in parallel or after essay)
