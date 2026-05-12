@@ -411,7 +411,7 @@ VENDOR_RECOMMENDATIONS = {
     "Compliance / Regulation": [
         ("US Federal / FedRAMP", "AWS Bedrock Gov or Azure Gov", "Only viable options"),
         ("EU data residency", "Nebius Finland/France, Scaleway, Mistral", ""),
-        ("Healthcare / HIPAA", "Baseten (zero-retention default), Fireworks or Together with BAA", ""),
+        ("Healthcare / HIPAA", "Baseten (zero-retention default), Together or Fireworks with BAA", ""),
         ("Finance + audit", "Baseten Writer reference or hyperscaler", ""),
     ],
     "Latency": [
@@ -420,7 +420,7 @@ VENDOR_RECOMMENDATIONS = {
         ("Agentic multi-hop <500ms", "Together ATLAS or Fireworks FireOptimizer", ""),
     ],
     "Cost": [
-        ("Minimize per-token", "DeepInfra", "10-30% below Fireworks/Together"),
+        ("Minimize per-token", "DeepInfra", "10-30% below Together/Fireworks"),
         ("Minimize LCPR", "Run the LCPR calculator (Tab 1) with your actual workload", ""),
         ("Need Multi-LoRA", "Fireworks Multi-LoRA", "$0.20/M for 8B base"),
     ],
@@ -430,7 +430,7 @@ VENDOR_RECOMMENDATIONS = {
         ("Fine-tune + serve", "Together or Fireworks", "Customer owns weights"),
     ],
     "Operational simplicity": [
-        ("No ML infra team", "Managed: Baseten, Fireworks, or Together dedicated", ""),
+        ("No ML infra team", "Managed: Together, Fireworks, or Baseten dedicated", ""),
         ("Have infra engineers", "Neo-cloud + vLLM/SGLang (Lambda, CoreWeave, RunPod)", ""),
     ],
 }

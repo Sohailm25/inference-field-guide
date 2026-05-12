@@ -27,7 +27,7 @@ flowchart TD
     BREAKEVEN -->|Yes| G3
 
     G3{Gate 3: Ownership<br/>Named owner + capacity<br/>for 6-10 eng-weeks?}
-    G3 -->|No| MANAGED[Use managed dedicated<br/>Baseten / Fireworks / Together]
+    G3 -->|No| MANAGED[Use managed dedicated<br/>Together / Fireworks / Baseten]
     G3 -->|Yes| DEDICATED[Self-managed dedicated<br/>Neo-cloud + vLLM/SGLang]
 
     style STAY_API fill:#e8f5e9,color:#333
@@ -54,4 +54,4 @@ flowchart TD
 - 6-10 engineer-weeks for initial migration
 - 4-8 weeks for optimization to cost crossover
 - 2-4 weeks per model-update cycle ongoing
-- If no owner exists, use managed dedicated (Baseten, Fireworks, Together)
+- If no owner exists, use managed dedicated (Together, Fireworks, Baseten)

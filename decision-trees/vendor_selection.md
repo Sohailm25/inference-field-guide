@@ -17,7 +17,7 @@ flowchart TD
     COMP{Regulation type?}
     COMP -->|US Federal / FedRAMP| FED[AWS Bedrock Gov<br/>or Azure Gov<br/>Only viable options]
     COMP -->|EU data residency| EU[Nebius Finland/France<br/>Scaleway, Mistral]
-    COMP -->|Healthcare / HIPAA| HEALTH[Baseten zero-retention default<br/>Fireworks, Together with BAA]
+    COMP -->|Healthcare / HIPAA| HEALTH[Baseten zero-retention default<br/>Together, Fireworks with BAA]
     COMP -->|Finance + audit| FIN[Baseten Writer reference<br/>or hyperscaler]
 
     LAT{Latency requirement?}
@@ -36,7 +36,7 @@ flowchart TD
     FLEX -->|Fine-tune + serve| TOG_FT[Together or Fireworks<br/>Customer owns weights]
 
     OPS{Team size?}
-    OPS -->|No ML infra team| MANAGED[Managed: Baseten, Fireworks,<br/>or Together dedicated]
+    OPS -->|No ML infra team| MANAGED[Managed: Together, Fireworks,<br/>or Baseten dedicated]
     OPS -->|Have infra engineers| SELF[Neo-cloud + vLLM/SGLang<br/>Lambda, CoreWeave, RunPod]
 
     style FED fill:#e8eaf6
