@@ -23,7 +23,7 @@ gate_1_volume:
       question: "How many output tokens does this workload generate per day?"
       value: null
       unit: "tokens/day"
-      threshold: ">20M output tokens/day with steady traffic for dedicated"
+      threshold: ">50M output tokens/day with steady traffic for dedicated (realistically ~140-200M at production utilization)"
 
     traffic_pattern:
       question: "Is traffic steady or bursty?"

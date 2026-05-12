@@ -11,7 +11,7 @@ flowchart TD
     G1 -->|Yes, $10K-$100K| SERVERLESS[Add serverless open-model<br/>for long-tail workloads]
     G1 -->|Yes, >$100K| G1B
 
-    G1B{Single workload<br/>>20M output tokens/day<br/>with steady traffic?}
+    G1B{Single workload<br/>>50M output tokens/day<br/>with steady traffic?}
     G1B -->|No| SERVERLESS
     G1B -->|Yes| G2
 
@@ -41,7 +41,7 @@ flowchart TD
 ### Gate 1: Volume
 - Under ~$10K/month: Stay on closed APIs
 - $10K-$100K/month: Add serverless open-model (Together, Fireworks, DeepInfra)
-- One workload >20M output tokens/day steady: Consider dedicated
+- One workload >50M output tokens/day steady: Consider dedicated (realistically ~140-200M at production utilization)
 
 ### Gate 2: Specialization
 - Fine-tuned models not available serverless

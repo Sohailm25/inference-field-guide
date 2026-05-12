@@ -21,6 +21,9 @@ class WorkloadProfile:
     repair_cost_per_failure: float  # $ cost to re-prompt a failed request
     engineering_hours_per_month: float
     engineer_hourly_cost: float
+    cache_hit_rate: float = 0.0  # 0.0 to 1.0 — fraction of input tokens served from cache
+    batch_eligible_fraction: float = 0.0  # 0.0 to 1.0 — fraction of requests eligible for batch
+    prefill_efficiency: float = 0.0  # 0.0 to 1.0 — input-to-output token conversion factor for dedicated GPU
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,13 @@ class ProviderPricing:
     gpu_hourly_rate: float = 0.0  # $/hr per GPU
     throughput_tps: int = 0  # theoretical max tokens/sec
     utilization: float = 0.0  # realistic utilization fraction (0.0 to 1.0)
+
+    # Cached input pricing
+    cached_input_rate_per_m: float = 0.0  # $/M cached input tokens
+
+    # Batch pricing
+    batch_input_rate_per_m: float = 0.0  # $/M batch input tokens
+    batch_output_rate_per_m: float = 0.0  # $/M batch output tokens
 
 
 @dataclass(frozen=True)
@@ -83,8 +93,23 @@ def compute_lcpr(profile: WorkloadProfile, pricing: ProviderPricing) -> LCPRResu
 def _compute_token_based_lcpr(profile: WorkloadProfile, pricing: ProviderPricing) -> LCPRResult:
     """LCPR for per-token pricing (closed API, serverless)."""
     # Base cost per request (token cost only)
-    input_cost = profile.avg_input_tokens * pricing.input_rate_per_m / 1_000_000
+    if profile.cache_hit_rate > 0 and pricing.cached_input_rate_per_m > 0:
+        cached_input = profile.avg_input_tokens * profile.cache_hit_rate
+        uncached_input = profile.avg_input_tokens * (1 - profile.cache_hit_rate)
+        input_cost = (uncached_input * pricing.input_rate_per_m / 1_000_000 +
+                      cached_input * pricing.cached_input_rate_per_m / 1_000_000)
+    else:
+        input_cost = profile.avg_input_tokens * pricing.input_rate_per_m / 1_000_000
     output_cost = profile.avg_output_tokens * pricing.output_rate_per_m / 1_000_000
+
+    # Blend batch pricing if applicable
+    if profile.batch_eligible_fraction > 0 and pricing.batch_input_rate_per_m > 0:
+        frac = profile.batch_eligible_fraction
+        batch_input_cost = profile.avg_input_tokens * pricing.batch_input_rate_per_m / 1_000_000
+        batch_output_cost = profile.avg_output_tokens * pricing.batch_output_rate_per_m / 1_000_000
+        input_cost = input_cost * (1 - frac) + batch_input_cost * frac
+        output_cost = output_cost * (1 - frac) + batch_output_cost * frac
+
     base_cost_per_request = input_cost + output_cost
 
     # Total attempts = original requests + retries
@@ -104,7 +129,7 @@ def _compute_token_based_lcpr(profile: WorkloadProfile, pricing: ProviderPricing
     # Successful requests
     successful_requests = profile.monthly_requests * profile.quality_gate_pass_rate
     if successful_requests == 0:
-        successful_requests = 1  # avoid division by zero
+        raise ValueError("quality_gate_pass_rate must be > 0: zero successful requests is undefined")
 
     lcpr = monthly_cost / successful_requests
 
@@ -125,7 +150,7 @@ def _compute_dedicated_lcpr(profile: WorkloadProfile, pricing: ProviderPricing) 
     # Effective throughput with utilization
     effective_tps = pricing.throughput_tps * pricing.utilization
     if effective_tps <= 0:
-        effective_tps = 1  # avoid division by zero
+        raise ValueError("effective throughput must be > 0: check throughput_tps and utilization")
 
     # Monthly token capacity
     monthly_token_capacity = effective_tps * 3600 * 24 * 30
@@ -134,6 +159,11 @@ def _compute_dedicated_lcpr(profile: WorkloadProfile, pricing: ProviderPricing) 
     total_output_tokens = (
         profile.avg_output_tokens * profile.monthly_requests * (1 + profile.retry_rate)
     )
+    if profile.prefill_efficiency > 0:
+        total_input_tokens = (
+            profile.avg_input_tokens * profile.monthly_requests * (1 + profile.retry_rate)
+        )
+        total_output_tokens += total_input_tokens * profile.prefill_efficiency
 
     # Number of GPUs needed (at least 1)
     gpus_needed = max(1, total_output_tokens / monthly_token_capacity)
@@ -155,7 +185,7 @@ def _compute_dedicated_lcpr(profile: WorkloadProfile, pricing: ProviderPricing) 
 
     successful_requests = profile.monthly_requests * profile.quality_gate_pass_rate
     if successful_requests == 0:
-        successful_requests = 1
+        raise ValueError("quality_gate_pass_rate must be > 0: zero successful requests is undefined")
 
     lcpr = monthly_cost / successful_requests
 
@@ -229,24 +259,36 @@ def load_provider_pricing(yaml_path: Path) -> list[ProviderPricing]:
     # Load closed APIs
     for provider_key, provider_data in data.get("closed_apis", {}).items():
         for model_key, model_data in provider_data.get("models", {}).items():
+            cached = model_data.get("cached_input_rate", 0.0)
+            batch_in = model_data.get("batch_input_rate", 0.0)
+            batch_out = model_data.get("batch_output_rate", 0.0)
             providers.append(
                 ProviderPricing(
                     name=f"{provider_data['name']} {model_data['name']}",
                     input_rate_per_m=model_data["input_rate"],
                     output_rate_per_m=model_data["output_rate"],
                     deployment_mode="closed_api",
+                    cached_input_rate_per_m=cached,
+                    batch_input_rate_per_m=batch_in,
+                    batch_output_rate_per_m=batch_out,
                 )
             )
 
     # Load serverless open
     for provider_key, provider_data in data.get("serverless_open", {}).items():
         for model_key, model_data in provider_data.get("models", {}).items():
+            cached = model_data.get("cached_input_rate", 0.0)
+            batch_in = model_data.get("batch_input_rate", 0.0)
+            batch_out = model_data.get("batch_output_rate", 0.0)
             providers.append(
                 ProviderPricing(
                     name=f"{provider_data['name']} {model_data['name']}",
                     input_rate_per_m=model_data.get("input_rate", 0),
                     output_rate_per_m=model_data.get("output_rate", 0),
                     deployment_mode="serverless_open",
+                    cached_input_rate_per_m=cached,
+                    batch_input_rate_per_m=batch_in,
+                    batch_output_rate_per_m=batch_out,
                 )
             )
 

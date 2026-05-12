@@ -302,3 +302,189 @@ class TestEssayPart5StagedPlaybook:
         dedicated_result = compute_lcpr(moderate_volume, low_util_gpu)
         # At 20% utilization and 1M requests, serverless should win
         assert serverless_result.lcpr < dedicated_result.lcpr
+
+
+# --- Exact-match tests using canonical essay profiles ---
+# These import from essay_profiles.py (single source of truth) and verify
+# the calculator produces the exact numbers cited in the essay.
+
+from calculator.essay_profiles import (
+    PART0_SAAS,
+    PART0_HIGH_RETRY,
+    PART0_LOW_GATE,
+    PART0_85_GATE,
+    PART1_B2B,
+    PART5_STAGE0,
+    PART5_STAGE1,
+    PART5_STAGE1_GPT,
+    PART5_STAGE1_TOG,
+    PART5_STAGE2,
+)
+
+# Provider pricing used across exact-match tests
+_GPT55 = ProviderPricing(
+    name="OpenAI GPT-5.5",
+    input_rate_per_m=5.00,
+    output_rate_per_m=30.00,
+    deployment_mode="closed_api",
+)
+_TOGETHER = ProviderPricing(
+    name="Together DeepSeek V3",
+    input_rate_per_m=1.25,
+    output_rate_per_m=1.25,
+    deployment_mode="serverless_open",
+)
+_DEEPINFRA = ProviderPricing(
+    name="DeepInfra DeepSeek V3",
+    input_rate_per_m=0.05,
+    output_rate_per_m=0.45,
+    deployment_mode="serverless_open",
+)
+
+
+class TestEssayPart0ExactNumbers:
+    """Exact-match tests for Part 0 table values using canonical profiles."""
+
+    def test_gpt55_lcpr(self):
+        """GPT-5.5 LCPR = $0.0191 per successful request."""
+        result = compute_lcpr(PART0_SAAS, _GPT55)
+        assert math.isclose(result.lcpr, 0.0191, rel_tol=0.005), (
+            f"Expected LCPR ~$0.0191, got ${result.lcpr:.4f}"
+        )
+
+    def test_gpt55_monthly(self):
+        """GPT-5.5 monthly cost = $9,090."""
+        result = compute_lcpr(PART0_SAAS, _GPT55)
+        assert math.isclose(result.monthly_cost, 9090.00, rel_tol=0.005), (
+            f"Expected monthly ~$9,090, got ${result.monthly_cost:,.2f}"
+        )
+
+    def test_together_lcpr(self):
+        """Together DeepSeek V3 LCPR = $0.0034 per successful request."""
+        result = compute_lcpr(PART0_SAAS, _TOGETHER)
+        assert math.isclose(result.lcpr, 0.0034, rel_tol=0.005), (
+            f"Expected LCPR ~$0.0034, got ${result.lcpr:.4f}"
+        )
+
+    def test_together_monthly(self):
+        """Together monthly cost = $1,622.50."""
+        result = compute_lcpr(PART0_SAAS, _TOGETHER)
+        assert math.isclose(result.monthly_cost, 1622.50, rel_tol=0.005), (
+            f"Expected monthly ~$1,622.50, got ${result.monthly_cost:,.2f}"
+        )
+
+    def test_deepinfra_lcpr(self):
+        """DeepInfra LCPR = ~$0.00203 per successful request."""
+        result = compute_lcpr(PART0_SAAS, _DEEPINFRA)
+        assert math.isclose(result.lcpr, 0.002028, rel_tol=0.005), (
+            f"Expected LCPR ~$0.00203, got ${result.lcpr:.6f}"
+        )
+
+    def test_deepinfra_monthly(self):
+        """DeepInfra monthly cost = $963.30."""
+        result = compute_lcpr(PART0_SAAS, _DEEPINFRA)
+        assert math.isclose(result.monthly_cost, 963.30, rel_tol=0.005), (
+            f"Expected monthly ~$963.30, got ${result.monthly_cost:,.2f}"
+        )
+
+    def test_gpt55_vs_together_ratio(self):
+        """GPT-5.5 / Together LCPR ratio = ~5.6x at baseline."""
+        gpt_result = compute_lcpr(PART0_SAAS, _GPT55)
+        tog_result = compute_lcpr(PART0_SAAS, _TOGETHER)
+        ratio = gpt_result.lcpr / tog_result.lcpr
+        assert math.isclose(ratio, 5.60, rel_tol=0.01), (
+            f"Expected ~5.60x, got {ratio:.2f}x"
+        )
+
+
+class TestEssayPart1ExactNumbers:
+    """Exact-match tests for Part 1 B2B migration example."""
+
+    def test_b2b_gpt_monthly(self):
+        """B2B workload on GPT-5.5 monthly cost = $18,128."""
+        result = compute_lcpr(PART1_B2B, _GPT55)
+        assert math.isclose(result.monthly_cost, 18128.00, rel_tol=0.005), (
+            f"Expected monthly ~$18,128, got ${result.monthly_cost:,.2f}"
+        )
+
+    def test_b2b_together_monthly(self):
+        """B2B workload on Together monthly cost = $2,903."""
+        result = compute_lcpr(PART1_B2B, _TOGETHER)
+        assert math.isclose(result.monthly_cost, 2903.00, rel_tol=0.005), (
+            f"Expected monthly ~$2,903, got ${result.monthly_cost:,.2f}"
+        )
+
+    def test_b2b_savings(self):
+        """Switching B2B from GPT-5.5 to Together saves $15,225/month."""
+        gpt_result = compute_lcpr(PART1_B2B, _GPT55)
+        tog_result = compute_lcpr(PART1_B2B, _TOGETHER)
+        savings = gpt_result.monthly_cost - tog_result.monthly_cost
+        assert math.isclose(savings, 15225.00, rel_tol=0.005), (
+            f"Expected savings ~$15,225, got ${savings:,.2f}"
+        )
+
+
+class TestEssaySensitivity:
+    """Exact-match tests for sensitivity analysis claims in the essay."""
+
+    def test_high_retry_ratio(self):
+        """At 20% retry rate, GPT/Together LCPR ratio = ~6.0x."""
+        gpt_result = compute_lcpr(PART0_HIGH_RETRY, _GPT55)
+        tog_result = compute_lcpr(PART0_HIGH_RETRY, _TOGETHER)
+        ratio = gpt_result.lcpr / tog_result.lcpr
+        assert math.isclose(ratio, 5.97, rel_tol=0.01), (
+            f"Expected ~5.97x (approx 6.0x), got {ratio:.2f}x"
+        )
+
+    def test_low_gate_ratio(self):
+        """At 70% quality gate, GPT/Together LCPR ratio = ~5.0x."""
+        gpt_result = compute_lcpr(PART0_LOW_GATE, _GPT55)
+        tog_result = compute_lcpr(PART0_LOW_GATE, _TOGETHER)
+        ratio = gpt_result.lcpr / tog_result.lcpr
+        assert math.isclose(ratio, 4.99, rel_tol=0.01), (
+            f"Expected ~4.99x (approx 5.0x), got {ratio:.2f}x"
+        )
+
+    def test_quality_gate_10_point_drop_increases_lcpr_13_pct(self):
+        """Dropping quality gate from 95% to 85% increases GPT-5.5 LCPR by ~13%."""
+        base = compute_lcpr(PART0_SAAS, _GPT55)
+        gate_85 = compute_lcpr(PART0_85_GATE, _GPT55)
+        pct_increase = (gate_85.lcpr - base.lcpr) / base.lcpr * 100
+        assert math.isclose(pct_increase, 13.0, rel_tol=0.02), (
+            f"Expected ~13% increase, got {pct_increase:.1f}%"
+        )
+
+
+class TestEssayPart5Numbers:
+    """Exact-match tests for Part 5 staged playbook costs."""
+
+    def test_stage0_monthly(self):
+        """Stage 0 (200K requests on GPT-5.5) monthly cost = $4,116."""
+        result = compute_lcpr(PART5_STAGE0, _GPT55)
+        assert math.isclose(result.monthly_cost, 4116.00, rel_tol=0.005), (
+            f"Expected monthly ~$4,116, got ${result.monthly_cost:,.2f}"
+        )
+
+    def test_stage1_all_gpt_monthly(self):
+        """Stage 1 before split (2M requests all on GPT-5.5) monthly cost = $33,960."""
+        result = compute_lcpr(PART5_STAGE1, _GPT55)
+        assert math.isclose(result.monthly_cost, 33960.00, rel_tol=0.005), (
+            f"Expected monthly ~$33,960, got ${result.monthly_cost:,.2f}"
+        )
+
+    def test_stage2_monthly(self):
+        """Stage 2 (10M requests on GPT-5.5) monthly cost = $166,600."""
+        result = compute_lcpr(PART5_STAGE2, _GPT55)
+        assert math.isclose(result.monthly_cost, 166600.00, rel_tol=0.005), (
+            f"Expected monthly ~$166,600, got ${result.monthly_cost:,.2f}"
+        )
+
+    def test_stage1_split_savings(self):
+        """Stage 1 70/30 split saves vs all-GPT."""
+        all_gpt = compute_lcpr(PART5_STAGE1, _GPT55)
+        split_gpt = compute_lcpr(PART5_STAGE1_GPT, _GPT55)
+        split_tog = compute_lcpr(PART5_STAGE1_TOG, _TOGETHER)
+        split_total = split_gpt.monthly_cost + split_tog.monthly_cost
+        assert split_total < all_gpt.monthly_cost, (
+            f"Split ${split_total:,.0f} should be cheaper than all-GPT ${all_gpt.monthly_cost:,.0f}"
+        )

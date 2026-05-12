@@ -293,3 +293,70 @@ class TestSweepCommand:
             assert "Together" in p or "OpenAI" in p, (
                 f"Unexpected provider: {p}"
             )
+
+
+# --- Compare Command: Cache Hit Rate and Batch Fraction Options ---
+
+
+class TestCompareCacheAndBatchOptions:
+    """Tests for --cache-hit-rate and --batch-fraction on the compare command."""
+
+    def test_cache_hit_rate_option(self, runner):
+        """--cache-hit-rate should produce output without error."""
+        result = runner.invoke(
+            cli,
+            [
+                "compare",
+                "--input-tokens", "800",
+                "--output-tokens", "400",
+                "--monthly-requests", "500000",
+                "--cache-hit-rate", "0.5",
+            ],
+        )
+        assert result.exit_code == 0, f"Exit code {result.exit_code}: {result.output}"
+        assert "$" in result.output or "lcpr" in result.output.lower()
+
+    def test_batch_fraction_option(self, runner):
+        """--batch-fraction should produce output without error."""
+        result = runner.invoke(
+            cli,
+            [
+                "compare",
+                "--input-tokens", "800",
+                "--output-tokens", "400",
+                "--monthly-requests", "500000",
+                "--batch-fraction", "0.3",
+            ],
+        )
+        assert result.exit_code == 0, f"Exit code {result.exit_code}: {result.output}"
+        assert "$" in result.output or "lcpr" in result.output.lower()
+
+    def test_cache_hit_rate_and_batch_fraction_combined(self, runner):
+        """Both --cache-hit-rate and --batch-fraction together should work."""
+        result = runner.invoke(
+            cli,
+            [
+                "compare",
+                "--input-tokens", "800",
+                "--output-tokens", "400",
+                "--monthly-requests", "500000",
+                "--cache-hit-rate", "0.4",
+                "--batch-fraction", "0.2",
+            ],
+        )
+        assert result.exit_code == 0, f"Exit code {result.exit_code}: {result.output}"
+        assert "$" in result.output or "lcpr" in result.output.lower()
+
+    def test_cache_hit_rate_with_profile(self, runner):
+        """--cache-hit-rate should also work with a named profile."""
+        result = runner.invoke(
+            cli,
+            [
+                "compare",
+                "--profile", "saas_chat",
+                "--cache-hit-rate", "0.5",
+            ],
+        )
+        # This may or may not apply cache-hit-rate to a profile --
+        # just verify no crash
+        assert result.exit_code == 0, f"Exit code {result.exit_code}: {result.output}"

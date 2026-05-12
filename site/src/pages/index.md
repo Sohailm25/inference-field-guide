@@ -17,7 +17,7 @@ Speculative decoding doesn't work at batch 12.
 
 Not "doesn't work well." 0.92x. *Slower.* I implemented it at Wendy's. We were running open-source models behind 100K+ daily drive-thru interactions, 400-600ms inference budget, and under production concurrency, we were paying 8% more compute with it enabled than without. The papers promise 2-3x decode speedup. The papers are measuring single-request latency on clean benchmarks. At batch 12-16, different sequences accept different numbers of draft tokens, creating batch-level inefficiency: some sequences are still verifying while others have moved on to generation. The memory bandwidth cost of maintaining KV caches for both draft and target models, plus the verification overhead, eats the theoretical single-request speedup. Add a draft model that's never seen "Baconator" in its training data, and you're underwater.
 
-(This problem is solvable — adaptive speculative decoding systems like Together's ATLAS address it by selecting draft strategies per-request rather than per-batch, achieving 2.65x speedup even at production concurrency [REPORTED]. But naive spec decode with a static draft model at high batch sizes? Net negative.)
+(This problem is solvable. Together's ATLAS uses a three-component architecture — a heavyweight static speculator for baseline throughput, a lightweight adaptive speculator that learns from live traffic patterns, and a confidence-aware controller that routes each request to the right strategy. By selecting draft strategies per-request rather than per-batch, ATLAS achieves 2.65x speedup even at production concurrency where static spec decode is net negative [REPORTED]. The per-request routing is why it works at batch 12: instead of forcing all sequences in a batch to use the same draft model, the controller adapts to each sequence's acceptance rate characteristics.)
 
 I spent two weeks on this before I killed it. Tried three draft model configurations. Fine-tuned a 1B speculator on 10K drive-thru transcripts — acceptance rate went from 48% to 58%, still below breakeven. The math is unforgiving: at α=0.55, γ=5, you get 1.94 expected tokens per step for 1.15x the cost. Net negative.
 
@@ -31,7 +31,7 @@ This essay is about closing that gap. Not with benchmarks — those lie in predi
 
 ### The April 2026 price signal
 
-On April 23, 2026, OpenAI doubled GPT-5.5's standard rates to $5.00/$30.00 per million input/output tokens [PUBLIC]. Anthropic held Claude Opus 4.7 and Sonnet 4.6 at $5/$25 and $3/$15 respectively. Gemini 2.5 Pro at $1.25/$10 (≤200K context) remains the cheapest frontier option.
+On April 23, 2026, OpenAI launched GPT-5.5 at $5.00/$30.00 per million input/output tokens — double the rates of its predecessor GPT-5.4 [PUBLIC]. Anthropic held Claude Opus 4.7 and Sonnet 4.6 at $5/$25 and $3/$15 respectively. Gemini 2.5 Pro at $1.25/$10 (≤200K context) remains the cheapest frontier option.
 
 The signal is clear: expect price *increases* at the frontier, not decreases. Meanwhile, serverless open-weights inference is 5-10x cheaper at the total-cost level for non-reasoning workloads and within 5-15% quality on most benchmarks. The price gap between frontier closed APIs and serverless open-weights is widening — a signal that the open-weights cost advantage is structural, not temporary.
 
@@ -65,29 +65,40 @@ Here's what the LCPR looks like across deployment modes, using May 2026 public p
 
 | Provider | Raw $/request | LCPR | Monthly cost | Overhead ratio |
 |----------|------------:|-----:|-----------:|------:|
-| OpenAI GPT-5.5 | $0.0160 | $0.0191 | $9,065 | 1.19x |
-| Lambda H100 (dedicated, 40% util) | $0.0043 | $0.0063 | $2,978 | 1.46x |
-| Together AI DeepSeek V3 (serverless) | $0.0015 | $0.0034 | $1,598 | 2.24x |
-| Fireworks AI Llama 70B (serverless) | $0.0011 | $0.0029 | $1,381 | 2.69x |
-| DeepInfra (serverless) | $0.0001 | $0.0018 | $874 | 19.18x |
+| OpenAI GPT-5.5 | $0.0160 | $0.0191 | $9,090 | 1.20x |
+| Lambda H100 (dedicated, 40% util) | $0.0060 | $0.0063 | $3,003 | 1.05x |
+| Together AI DeepSeek V3 (serverless) | $0.0015 | $0.0034 | $1,622 | 2.28x |
+| Fireworks AI Llama 70B (serverless) | $0.0011 | $0.0030 | $1,406 | 2.74x |
+| DeepInfra GPT-OSS-120B (serverless) | $0.0002 | $0.0020 | $963 | 9.22x |
 
 Three things to notice.
 
-**First, the ranking doesn't change — but the magnitude does.** GPT-5.5's raw token cost is $0.016 per request. Its LCPR is $0.019 — only 19% higher. For a managed API with near-zero engineering burden, that's a small overhead. But DeepInfra at $0.0001 per request has an LCPR of $0.0018 — a 19x overhead ratio. This doesn't mean DeepInfra is inefficient — it's still the cheapest total cost in the table. The high ratio means tokens are cheap enough that fixed costs (engineering, retries, repair) dominate the per-request LCPR. Cheap providers need volume to amortize those fixed costs.
+**First, the ranking doesn't change — but the magnitude does.** GPT-5.5's raw token cost is $0.016 per request. Its LCPR is $0.019 — only 20% higher. For a managed API with near-zero engineering burden, that's a small overhead. But DeepInfra at $0.0002 per request (note: DeepInfra prices asymmetrically at $0.05/$0.45 per million input/output tokens [PUBLIC]) has an LCPR of $0.0020 — a 9.2x overhead ratio. This doesn't mean DeepInfra is inefficient — it's still the cheapest total cost in the table. The high ratio means tokens are cheap enough that fixed costs (engineering, retries, repair) dominate the per-request LCPR. Cheap providers need volume to amortize those fixed costs.
 
-**Second, the cost ratios compress.** GPT-5.5 is 10.7x more expensive than Together on raw token cost. At LCPR level, it's 5.7x. Engineering overhead, retries, and repair costs are roughly fixed regardless of provider — they compress the ratio. Any comparison that doesn't include these costs is overstating the savings from switching.
+**Second, the cost ratios compress.** GPT-5.5 is 10.7x more expensive than Together on raw token cost. At LCPR level, it's 5.6x. Engineering overhead, retries, and repair costs are roughly fixed regardless of provider — they compress the ratio. Any comparison that doesn't include these costs is overstating the savings from switching.
 
-**Third, dedicated GPU is not the cheapest option at this volume.** A Lambda H100 at $2.99/hr with 40% realistic utilization produces an LCPR of $0.0063 — more expensive than both serverless open-weights options. The GPU costs $2,153/month whether you use it or not. At 500K requests generating 200M output tokens per month, you're paying for capacity you don't fill. Dedicated wins at scale, but the crossover point is higher than most teams expect.
+**Third, dedicated GPU is not the cheapest option at this volume.** A Lambda H100 at $2.99/hr with 40% realistic utilization produces an LCPR of $0.0063 — more expensive than both serverless open-weights options. The GPU costs $2,153/month whether you use it or not. At 500K requests generating 200M output tokens per month, you're paying for capacity you don't fill. Dedicated wins at scale, but the crossover is higher than most teams expect.
 
 ### The numbers change when reliability changes
 
 The worked example above assumes a 3% retry rate and 95% quality gate. What happens when those shift?
 
-At 20% retry rate (not uncommon during model migrations or prompt changes), GPT-5.5's LCPR rises to $0.0219. Together's rises to $0.0036. The ratio *increases* from 5.7x to 6.0x — retries hurt expensive providers more because each retry costs more tokens.
+At 20% retry rate (not uncommon during model migrations or prompt changes), GPT-5.5's LCPR rises to $0.0220. Together's rises to $0.0037. The ratio *increases* from 5.6x to 6.0x — retries hurt expensive providers more because each retry costs more tokens.
 
-At 70% quality gate pass rate (a model that frequently fails structured output validation), GPT-5.5's LCPR jumps to $0.0263. Together's jumps to $0.0049. The ratio *compresses* to 5.3x — because repair and engineering costs are provider-independent and start to dominate.
+At 70% quality gate pass rate (a model that frequently fails structured output validation), GPT-5.5's LCPR jumps to $0.0267. Together's jumps to $0.0053. The ratio *compresses* to 5.0x — because repair and engineering costs are provider-independent and start to dominate.
 
-This is the cost illusion. The pricing page shows you the token rate. The LCPR shows you the bill. They're different numbers, and the gap between them depends on factors — retry rate, quality gate, engineering time, observability cost — that no vendor has any incentive to help you measure.
+**The I/O ratio matters more than most teams realize.** The GPT-5.5 vs Together cost advantage depends heavily on the output-to-input ratio because GPT-5.5 prices output at 6x its input rate ($30 vs $5 per million), while Together charges $1.25 symmetrically. At 800 input tokens with varying output:
+
+| Output tokens | Raw ratio | LCPR ratio |
+|-------------:|----------:|-----------:|
+| 100 (classification) | 6.2x | 3.1x |
+| 400 (essay default) | 10.7x | 5.6x |
+| 1,000 (long-form) | 15.1x | 9.1x |
+| 1,500 (code gen) | 17.0x | 11.2x |
+
+Output-heavy workloads (code generation, long-form content) see the largest savings from migration. Input-heavy workloads (classification, embedding prep) see the smallest — and may not justify migration at all if the volume is low [MODELED].
+
+This is the cost illusion. The pricing page shows you the token rate. The LCPR shows you the bill. They're different numbers, and the gap between them depends on factors — retry rate, quality gate, engineering time, I/O ratio, observability cost — that no vendor has any incentive to help you measure.
 
 ### The observability tax
 
@@ -115,7 +126,7 @@ I work at Together AI. Where Together wins, I'll say so and cite why. Where Toge
 
 ## Part 1: When to Leave the API
 
-The question is not *whether* open-weights inference is cheaper. Part 0 showed the LCPR math — 5-7x at the loaded level, 10-100x on raw tokens. The question is whether the savings justify the migration cost, and for which workloads.
+The question is not *whether* open-weights inference is cheaper. Part 0 showed the LCPR math — 5-6x at the loaded level, 10-100x on raw tokens. The question is whether the savings justify the migration cost, and for which workloads.
 
 Most teams get this wrong in one of two directions. They either stay on closed APIs past the point where they're hemorrhaging money, or they migrate too early, spend 10 engineer-weeks rebuilding prompt pipelines, and discover the savings don't cover the engineering bill for two years.
 
@@ -138,7 +149,7 @@ Here's the worked example. A B2B SaaS company running 800,000 requests per month
 
 Switching from GPT-5.5 to Together DeepSeek V3 saves $15,225 per month — $182,700 per year [MODELED]. Against a $48,000 migration cost, the payback period is 3.2 months. That's a clear pass.
 
-But notice what happens at lower volume. In the Part 0 worked example (500K requests/month, simpler workload profile), GPT-5.5's monthly cost was $9,065. Against Together at $1,598, the savings are $7,467/month. Still a 6.4-month payback — acceptable, but you're now sensitive to migration overruns. If the migration takes 12 weeks instead of 8, or if the quality gate drops from 95% to 88% during the transition and you spend two months tuning prompts, the payback stretches past a year.
+But notice what happens at lower volume. In the Part 0 worked example (500K requests/month, simpler workload profile), GPT-5.5's monthly cost was $9,090. Against Together at $1,622, the savings are $7,468/month. Still a 6.4-month payback — acceptable, but you're now sensitive to migration overruns. If the migration takes 12 weeks instead of 8, or if the quality gate drops from 95% to 88% during the transition and you spend two months tuning prompts, the payback stretches past a year.
 
 **The Volume Gate threshold**: if your monthly closed-API spend is below $10,000, the migration economics are marginal. Between $10,000 and $50,000, the economics work but execution risk matters — you need a team that's done this before. Above $50,000, the savings are large enough to absorb migration friction. These boundaries are rough; run the [LCPR calculator](https://github.com/sohailm/inference-field-guide) against your actual workload to get precise numbers.
 
@@ -146,9 +157,11 @@ But notice what happens at lower volume. In the Part 0 worked example (500K requ
 
 Volume isn't the only reason to migrate. Sometimes the workload requires something closed APIs can't provide.
 
-**Fine-tuned models.** If your quality evaluation shows that a fine-tuned 8B or 70B model matches frontier quality for your specific domain, the cost advantage is enormous. Cresta runs thousands of LoRA adapters for per-domain contact center agents on Fireworks Multi-LoRA at $0.20/M tokens — a 26.6x LCPR advantage over GPT-5.5 at scale [MODELED]. Even accounting for the engineering cost of training and maintaining the fine-tune pipeline, the payback is measured in weeks, not months.
+**Fine-tuned models.** If your quality evaluation shows that a fine-tuned 8B or 70B model matches frontier quality for your specific domain, the cost advantage is enormous. Cresta runs thousands of LoRA adapters for per-domain contact center agents on Fireworks Multi-LoRA at $0.20/M tokens — a 27x LCPR advantage over GPT-5.5 at 3M requests/month [MODELED]. Even accounting for the engineering cost of training and maintaining the fine-tune pipeline, the payback is measured in weeks, not months.
 
-**Latency SLOs.** Shared APIs under load produce P99 latency spikes from ~300ms to 2-4 seconds on 70B-class models. For agent pipelines with 5+ chained calls, that compounds: a 2-second P99 across 5 calls is a 10-second worst case. Dedicated inference lets you control batch size and KV cache budget. Decagon achieved 90ms model latency and P90 of 342ms for voice AI agents using Together AI with custom-trained speculators per application — "6x cost reduction per turn vs. gpt-5 mini, 11x faster inference" [REPORTED].
+**Latency SLOs.** Shared APIs under load produce P99 latency spikes from ~300ms to 2-4 seconds on 70B-class models. For agent pipelines with 5+ chained calls, that compounds: a 2-second P99 across 5 calls is a 10-second worst case. Dedicated inference lets you control batch size and KV cache budget.
+
+Decagon is the clearest illustration. They build voice AI agents for enterprise customer support — tens of millions of interactions, 80%+ deflection rate — running a multi-model voice stack (STT → LLM → TTS). Voice AI requires sub-100ms model latency to feel conversational, which shared APIs cannot guarantee under load. After migrating to Together AI on NVIDIA HGX B200 infrastructure with custom-trained speculators per application (not a static draft model — each application gets a speculator trained on its conversation patterns), Decagon achieved P95 model latency under 400ms, a 6x cost reduction per turn versus GPT-5 Mini, and 11x faster inference [REPORTED]. The custom-per-application speculator approach is key: generic speculators have low acceptance rates on domain-specific vocabulary, the same problem I hit at Wendy's with "Baconator."
 
 **Custom architectures.** Some workloads require model modifications that closed APIs don't support: constrained decoding, custom sampling strategies, domain-specific tokenizers, or inference-time interventions like activation steering. If you need to modify the model's forward pass, you need dedicated inference.
 
@@ -170,11 +183,27 @@ The third gate is non-economic: compliance, data residency, and vendor dependenc
 
 Not every workload should move. Three patterns where closed APIs remain the right answer:
 
-**Small-token, high-volume workloads where Mini-class models win.** GPT-5.5 Mini at $0.30/$1.50 per million tokens is cheaper than Together DeepSeek V3 at $1.25/$1.25 for workloads with short outputs. A voice classification task at 300 input tokens and 150 output tokens costs $0.00076 LCPR on Mini versus $0.00101 on Together [MODELED]. Open-weights isn't always cheaper — the math depends on the input/output ratio and which model tier you're comparing against.
+**Small-token, high-volume workloads where Mini-class models win.** GPT-5.5 Mini at $0.30/$1.50 per million tokens is cheaper than Together DeepSeek V3 at $1.25/$1.25 for workloads with short outputs. A voice classification task at 300 input tokens and 150 output tokens at 3M requests/month costs $0.00073 LCPR on Mini versus $0.00100 on Together [MODELED]. Open-weights isn't always cheaper — the math depends on the input/output ratio and which model tier you're comparing against.
 
-**Reasoning-heavy workloads where frontier quality matters.** If your task requires chain-of-thought reasoning, mathematical proof, or complex code generation where GPT-5.5 or Claude Opus 4.7 measurably outperform open-weights alternatives, the quality delta means more failed requests, more retries, and a higher LCPR on the open-weights side. Quality gate pass rate is the most powerful variable in the LCPR formula — a 10-point drop from 95% to 85% increases LCPR by 12%.
+**Reasoning-heavy workloads where frontier quality matters.** If your task requires chain-of-thought reasoning, mathematical proof, or complex code generation where GPT-5.5 or Claude Opus 4.7 measurably outperform open-weights alternatives, the quality delta means more failed requests, more retries, and a higher LCPR on the open-weights side. Quality gate pass rate is the most powerful variable in the LCPR formula — a 10-point drop from 95% to 85% increases LCPR by 13% on expensive providers and up to 19% on cheap ones where fixed costs dominate [MODELED].
 
 **Prototyping and early product.** At less than $10,000 per month, the engineering overhead of managing even a serverless open-weights deployment — prompt migration, model evaluation, gateway configuration — exceeds the savings. Use a closed API, ship the product, and revisit when you hit the Volume Gate.
+
+### The Gemini question
+
+Gemini 2.5 Pro at $1.25/$10 looks like frontier quality at near-open-weights pricing. Why migrate to open-weights when Gemini exists?
+
+The answer depends on the workload shape.
+
+**Output pricing is still asymmetric.** Gemini's output rate is $10/M — 8x Together's $1.25/M. For a RAG pipeline at 4,000 input / 600 output tokens and 800K requests/month, Gemini's LCPR is $0.0138 versus Together's $0.0079 — a 1.7x gap [MODELED]. For output-heavy workloads (code generation at 800/2,000 tokens), Gemini's LCPR rises to $0.0250 versus Together's $0.0054 — a 4.6x gap. Gemini is near-open-weights on *input* but not on *output*.
+
+**No customization.** You cannot fine-tune Gemini, run custom speculators, control quantization, or modify the inference pipeline. Cursor and Decagon need these capabilities — it's why they use dedicated open-weights infrastructure.
+
+**Data sovereignty.** Gemini runs on Google infrastructure with no self-hosting option and no zero-retention guarantee. For regulated workloads, this narrows the viable use cases.
+
+**Vendor lock-in.** If Google changes pricing — as OpenAI did with GPT-5.5 — there's no portability. Open weights move between Together, Fireworks, DeepInfra, and self-hosted deployments.
+
+**Where Gemini wins:** input-heavy classification and analysis workloads where output is short, customization is unnecessary, and Google's data handling is acceptable. At 2,000 input / 100 output tokens, the Gemini-to-Together LCPR ratio compresses to 1.2x — barely worth migrating [MODELED]. The Migration Gate framework still applies: if the savings don't cover migration cost, stay on Gemini.
 
 ### The break-even math for dedicated GPU
 
@@ -215,13 +244,15 @@ Multi-source inference architectures fall into four patterns. Most production de
 
 Cursor is the canonical example. Fast Apply (their deterministic code-edit feature) runs on a fine-tuned Llama-3-70B at ~1,000 tokens/sec through Fireworks speculative decoding. Sualeh Asif, Cursor co-founder: "We leverage speculative decoding for our custom models deployed on Fireworks.ai, which power the Fast Apply and Cursor Tab features. Thanks to speculative decoding, we saw up to a 2x reduction in generation latency" [REPORTED]. Note: Cursor's 2x speedup is for deterministic code-edit operations with predictable output structure — a different workload shape than the high-concurrency, variable-output scenario described in Part 0 where naive spec decode is net negative. Adaptive speculative decoding (FireOptimizer, ATLAS) addresses the batch-size problem by selecting draft strategies per-request. Composer 2 (their agentic coding model) trains and serves through Fireworks with weight syncs every training step via delta-compressed S3 uploads. Chat features use Claude Sonnet and Opus directly.
 
-Why three providers? Because each workload has a different constraint. Fast Apply needs throughput and deterministic diffs — a fine-tuned open model with speculative decoding. Chat needs frontier reasoning — Claude. Composer needs training-inference integration with fast iteration cycles — Fireworks RL infrastructure.
+Cursor's production deployment spans multiple providers: Fireworks for speculative decoding on Fast Apply, Anthropic for frontier chat, and Together AI for Blackwell GPU inference with a quantization pipeline that moves new model weights from candidate to test endpoint within days [REPORTED].
 
-Notion follows the same pattern: Fireworks for latency-critical features using fine-tuned models ("we reduced latency from about 2 seconds to 350 milliseconds," Sarah Sachs, Head of AI Engineering [REPORTED]), Baseten for other workloads, and Anthropic with prompt caching for features that benefit from frontier reasoning.
+Why multiple providers? Because each workload has a different constraint. Fast Apply needs throughput and deterministic diffs — a fine-tuned open model with speculative decoding. Chat needs frontier reasoning — Claude. Agentic coding needs training-inference integration — Fireworks RL infrastructure. And the quantization pipeline needs next-gen hardware — Together's Blackwell cluster.
+
+Notion follows the same pattern: Fireworks for latency-critical features using fine-tuned models ("we reduced latency from about 2 seconds to 350 milliseconds," Sarah Sachs, Head of AI Engineering [REPORTED]), Baseten for other workloads, and Anthropic with prompt caching for features that benefit from frontier reasoning. Zomato's AI chatbot Zia, handling 1,000+ messages per minute on optimized Llama models through Together, achieved 2x CSAT improvement and 75% reduction in response time [REPORTED].
 
 **Pattern 2: Capability-Arbitrage.** The same logical workload routes to different providers based on the *specific capability* needed for each request. This requires more sophisticated routing but captures large cost savings.
 
-The Multi-LoRA pattern is the clearest example. Cresta runs thousands of LoRA adapters for per-domain contact center fine-tunes on Fireworks Multi-LoRA, with "a documented 100x cost reduction versus GPT-4" [REPORTED]. At $0.20/M tokens for a Llama 8B base with domain-specific adapters versus GPT-5.5 at $5/$30, the LCPR advantage is 26.6x at scale [MODELED]. But Cresta doesn't route *everything* through Multi-LoRA — complex queries that exceed the fine-tune's capability escalate to a frontier model.
+The Multi-LoRA pattern is the clearest example. Cresta runs thousands of LoRA adapters for per-domain contact center fine-tunes on Fireworks Multi-LoRA, with "a documented 100x cost reduction versus GPT-4" [REPORTED]. At $0.20/M tokens for a Llama 8B base with domain-specific adapters versus GPT-5.5 at $5/$30, the LCPR advantage is 27x at 3M requests/month [MODELED]. But Cresta doesn't route *everything* through Multi-LoRA — complex queries that exceed the fine-tune's capability escalate to a frontier model.
 
 This is capability-arbitrage: use the cheapest model that can handle each request, and escalate only when necessary. The difficulty is building the routing logic to decide when to escalate. Most teams start with simple heuristics (input length, task type, confidence score) and add complexity only when the data justifies it.
 
@@ -315,7 +346,7 @@ Build a custom runtime only if you have Character.AI-level scale (1B+ queries/da
 
 **Layer 3: Kernels.** *Recommendation: Buy.*
 
-FlashAttention-4 (Tri Dao, Hot Chips 2025): up to 22% faster than cuDNN attention on Blackwell [REPORTED]. Together Kernel Collection (TKC): 24% faster training operations per Together's published benchmarks [VENDOR CLAIM]. Speculative decoding kernels are now a vendor differentiator: Together's ATLAS achieves 500 TPS on DeepSeek-V3.1 (2.65x standard decoding, outperforming Groq) by adapting draft model selection per-request rather than using a static draft model [REPORTED]. Fireworks' FireOptimizer delivers ~2x latency reduction at Cursor [REPORTED]. NVIDIA cuBLAS + CUTLASS for everything else. The build case is essentially zero outside of foundation model labs and the handful of teams doing custom attention work.
+FlashAttention-4 (Tri Dao, Together AI co-founder and Chief Scientist, Hot Chips 2025): up to 22% faster than cuDNN attention on Blackwell [REPORTED]. Together Kernel Collection (TKC), built on Tri Dao's ThunderKittens framework developed with Stanford collaborators: reduces 1,000+ lines of CUDA to 100-200 lines while delivering 1.8x faster attention than FlashAttention-3, powering up to 75% faster FP8 inference on Blackwell [VENDOR CLAIM]. The research-to-production pipeline — FlashAttention → ThunderKittens → TKC → ATLAS — is a structural cost advantage: improvements come from fundamental research at the attention kernel level, not GPU arbitrage. Speculative decoding kernels are now a vendor differentiator: Together's ATLAS achieves 500 TPS on DeepSeek-V3.1 (2.65x standard decoding) by adapting draft model selection per-request rather than using a static draft model [REPORTED]. Fireworks' FireOptimizer delivers ~2x latency reduction at Cursor [REPORTED]. NVIDIA cuBLAS + CUTLASS for everything else. The build case is essentially zero outside of foundation model labs and the handful of teams doing custom attention work.
 
 **Layer 4: Hardware.** *Recommendation: Buy from neo-clouds.*
 
@@ -478,9 +509,10 @@ This final section synthesizes Parts 1-4 into concrete, staged guidance. Each st
 **Actions**:
 1. Pick one provider. Anthropic if you need reasoning quality and prompt caching (90% reduction on cached input tokens [PUBLIC]). OpenAI if you need the broadest ecosystem. Gemini if you need the cheapest frontier option ($1.25/$10 for ≤200K context [PUBLIC]).
 2. Use prompt caching aggressively. Anthropic's caching reduces cached input cost to 10% of base. OpenAI's automatic caching triggers on prompts ≥1,024 tokens at 50% discount [PUBLIC].
-3. Don't optimize for inference cost. At $3,700/month on GPT-5.5 for 200K requests [MODELED], the savings from switching to open-weights ($2,987/month) don't justify the engineering distraction of migration. Ship the product.
+3. Don't optimize for inference cost. At $4,116/month on GPT-5.5 for 200K requests [MODELED], the savings from switching to open-weights ($2,987/month) don't justify the engineering distraction of migration. Ship the product.
+4. Use prompt caching to stretch your closed-API budget further. A Sonnet workload with 4,800 input tokens (4,000-token system prompt + 800 user input) and 600 output tokens at 500K requests/month costs $12,901/month without caching. With Anthropic's 83% cache hit rate (the system prompt is cacheable), LCPR drops 43% to $7,361/month — a $5,540 savings with zero migration effort [MODELED]. Even cached Sonnet at $0.0155 LCPR is still 1.7x Together's uncached $0.0091, but the gap narrows enough that migration ROI becomes marginal at this volume.
 
-**Exit threshold**: monthly inference spend exceeds $10,000 (approximately 500K requests/month on GPT-5.5 at 800/400 tokens — the point where multi-source migration ROI exceeds $7K/month per the Part 1 worked example), OR you experience a provider outage that costs revenue, OR a customer asks about data residency. The $10K figure is a guideline; teams with tight margins or latency-sensitive workloads may justify Stage 1 earlier.
+**Exit threshold**: monthly inference spend exceeds $10,000 (approximately 500K requests/month on GPT-5.5 at 800/400 tokens — the point where multi-source migration ROI exceeds $7.5K/month per the Part 1 worked example), OR you experience a provider outage that costs revenue, OR a customer asks about data residency. The $10K figure is a guideline; teams with tight margins or latency-sensitive workloads may justify Stage 1 earlier.
 
 ### Stage 1: Scale ($10,000-$100,000/month)
 
@@ -495,7 +527,7 @@ This final section synthesizes Parts 1-4 into concrete, staged guidance. Each st
 4. Implement prompt caching everywhere it helps.
 5. Start measuring LCPR, not just token cost. The difference matters at this scale.
 
-**Worked example**: a team at 2M requests/month on GPT-5.5 spends $35,020/month [MODELED]. Splitting 70/30 — keeping 1.4M quality-sensitive requests on GPT-5.5 and moving 600K long-tail requests to Together — brings the combined bill to $26,372. That's $8,648/month in savings, or $103,776/year, with minimal engineering effort [MODELED].
+**Worked example**: a team at 2M requests/month on GPT-5.5 spends $33,960/month [MODELED]. Splitting 70/30 — keeping 1.4M quality-sensitive requests on GPT-5.5 and moving 600K long-tail requests to Together — brings the combined bill to $25,799. That's $8,161/month in savings, or $97,932/year, with minimal engineering effort [MODELED].
 
 **Exit threshold**: any single workload exceeds ~50M output tokens/day with steady traffic, OR you need a fine-tuned model, OR you have a hard latency SLO under 500ms that shared APIs can't meet.
 
@@ -512,7 +544,7 @@ This final section synthesizes Parts 1-4 into concrete, staged guidance. Each st
 4. Buy compliance certifications (SOC 2, HIPAA BAA) from your dedicated vendor.
 5. Monitor GPU utilization weekly. The 40% threshold approximates the break-even between dedicated and serverless for 70B-class models: at Lambda's $2.99/hr and serverless rates of $0.90-$1.25/M tokens, you need roughly 10 hours/day of saturated throughput (42% daily utilization) to justify dedicated [MODELED]. Below that, serverless is cheaper. Consolidate via Multi-LoRA if you have multiple low-volume workloads that can share a GPU.
 
-**Worked example**: at 10M requests/month, GPT-5.5 costs $169,300/month. Together serverless costs $19,950. A Lambda H100 at 40% utilization costs $10,958 for that same workload [MODELED] — but this excludes egress costs. Lambda charges zero egress, but if you're routing outputs through a hyperscaler's load balancer or CDN, add $0.05-$0.09/GB. At 60% utilization, the dedicated cost drops to $8,806. The dedicated option wins at this volume if (a) utilization stays above 40%, and (b) egress costs don't negate the savings. Serverless remains the safer default.
+**Worked example**: at 10M requests/month, GPT-5.5 costs $166,600/month. Together serverless costs $17,250. A Lambda H100 at 40% utilization costs $8,258 for that same workload [MODELED] — but this excludes egress costs. Lambda charges zero egress, but if you're routing outputs through a hyperscaler's load balancer or CDN, add $0.05-$0.09/GB. At higher utilization, the dedicated cost drops further. The dedicated option wins at this volume if (a) utilization stays above 40%, and (b) egress costs don't negate the savings. Serverless remains the safer default.
 
 **Exit threshold**: total monthly spend exceeds $1M, OR you have a strategic reason to control kernels and models end-to-end.
 
