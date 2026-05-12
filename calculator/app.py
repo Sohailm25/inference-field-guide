@@ -3,8 +3,12 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import replace
 from pathlib import Path
+
+# Ensure project root is on sys.path (needed when not pip-installed)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import plotly.express as px
 import plotly.graph_objects as go
