@@ -22,7 +22,7 @@ flowchart TD
     Q4 -->|Yes| GS[Geo-Segmented<br/>Provider per region/regulation]
     Q4 -->|No| PF
 
-    WS --> EXAMPLES_WS["Examples:<br/>Cursor: Fireworks (Fast Apply) + Anthropic (chat)<br/>Notion: Fireworks (latency) + Baseten (other)"]
+    WS --> EXAMPLES_WS["Examples:<br/>Cursor: Fireworks (Fast Apply) + Together (Blackwell inference) + Anthropic (chat)<br/>Notion: Fireworks (latency) + Baseten (other)"]
 
     CA --> EXAMPLES_CA["Examples:<br/>Cresta: Fireworks Multi-LoRA<br/>Decagon: Together ATLAS speculation<br/>Writer: Baseten custom Docker"]
 
@@ -42,7 +42,7 @@ flowchart TD
 Different providers for different workload types based on latency/quality/cost tradeoffs.
 - **When**: Multiple workloads with different SLOs
 - **Complexity**: Medium (N provider relationships, simple routing)
-- **Example**: Cursor — Fast Apply + Cursor Tab on Fireworks, chat on Anthropic
+- **Example**: Cursor — Fast Apply on Fireworks, Blackwell inference on Together, chat on Anthropic
 
 ### 2. Capability-Arbitrage
 Best provider per specific technical capability.

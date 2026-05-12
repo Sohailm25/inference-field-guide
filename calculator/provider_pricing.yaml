@@ -28,7 +28,7 @@ closed_apis:
         input_rate: 0.30
         output_rate: 1.50
         cached_input_rate: 0.15
-        notes: "Estimated from prior generation patterns"
+        notes: "[MODELED] Estimated from prior generation patterns — no public confirmation"
 
   anthropic:
     name: "Anthropic"
@@ -110,9 +110,9 @@ serverless_open:
     models:
       gpt_oss_120b:
         name: "GPT-OSS-120B"
-        input_rate: 0.08       # [REPORTED] Artificial Analysis
-        output_rate: 0.08
-        notes: "Typically 10-30% below Fireworks/Together for same model"
+        input_rate: 0.05       # [PUBLIC] verified 2026-05-11 — deepinfra.com/openai/gpt-oss-120b
+        output_rate: 0.45      # [PUBLIC] verified 2026-05-11 — deepinfra.com/openai/gpt-oss-120b
+        notes: "Asymmetric pricing. Output is 9x input rate."
 
   baseten:
     name: "Baseten"
@@ -121,8 +121,9 @@ serverless_open:
     models:
       llama_3_3_70b_api:
         name: "Llama 3.3 70B (Model API)"
-        input_rate: 0.88       # [PUBLIC] approximate
+        input_rate: 0.88       # [MODELED] approximate — inferred from Together/Fireworks rates
         output_rate: 0.88
+        notes: "[MODELED] Estimated from peer rates. Baseten prices by replica-hour for dedicated. This per-token rate is approximate for Model API only. Verify at baseten.co/pricing."
 
 dedicated_gpu:
   # Per-GPU hourly rates for dedicated inference
@@ -176,4 +177,4 @@ throughput_assumptions:
     theoretical_max_tps: 1500    # tokens/sec at high batch utilization
     realistic_utilization: 0.40  # 30-50% of theoretical in production
     effective_tps: 600           # theoretical * utilization
-    notes: "Based on Spheron benchmark, Clarifai validation"
+    notes: "Based on Spheron benchmark; 40% utilization is midpoint of 30-50% production range from industry reports"
