@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from calculator.lcpr import (
+    BreakEvenResult,
     LCPRCalculator,
     LCPRResult,
     ProviderPricing,
@@ -62,24 +63,26 @@ def openai_pricing():
 
 @pytest.fixture
 def together_pricing():
-    """Together AI DeepSeek V3 serverless pricing."""
+    """Together AI DeepSeek V3 serverless pricing.
+    [PUBLIC_PRICING] together.ai/pricing — verified 2026-05-12."""
     return ProviderPricing(
         name="Together DeepSeek V3",
-        input_rate_per_m=1.25,
-        output_rate_per_m=1.25,
+        input_rate_per_m=0.60,
+        output_rate_per_m=1.70,
         deployment_mode="serverless_open",
     )
 
 
 @pytest.fixture
 def dedicated_pricing():
-    """Dedicated H100 pricing (Lambda)."""
+    """Dedicated H100 pricing (Lambda).
+    [PUBLIC_PRICING] lambda.ai/pricing — verified 2026-05-12."""
     return ProviderPricing(
         name="Lambda H100 Dedicated",
         input_rate_per_m=0.0,
         output_rate_per_m=0.0,
         deployment_mode="dedicated",
-        gpu_hourly_rate=2.99,
+        gpu_hourly_rate=3.99,
         throughput_tps=1500,
         utilization=0.40,
     )
@@ -105,7 +108,7 @@ class TestComputeLCPR:
         openai_result = compute_lcpr(simple_profile, openai_pricing)
         together_result = compute_lcpr(simple_profile, together_pricing)
 
-        # Together at $1.25/$1.25 should be much cheaper than OpenAI at $5/$30
+        # Together at $0.60/$1.70 should be much cheaper than OpenAI at $5/$30
         assert together_result.lcpr < openai_result.lcpr
 
     def test_zero_failure_lcpr_equals_raw_token_cost(self, zero_failure_profile, openai_pricing):
@@ -240,12 +243,32 @@ class TestDedicatedLCPR:
 class TestBreakEven:
     """Tests for crossover/break-even analysis between deployment modes."""
 
-    def test_break_even_returns_daily_tokens(self, together_pricing, dedicated_pricing):
-        """Break-even should return daily token volume where dedicated becomes cheaper."""
+    def test_break_even_infeasible_at_low_utilization(self, together_pricing, dedicated_pricing):
+        """At $3.99/hr, 40% util vs $1.70/M serverless — effective dedicated rate
+        ($1.848/M) exceeds serverless, so break-even is not feasible."""
         result = compute_break_even(together_pricing, dedicated_pricing)
 
+        assert not result.break_even_feasible
+        assert result.break_even_daily_output_tokens == float("inf")
+        assert result.effective_cost_per_m > together_pricing.output_rate_per_m
+
+    def test_break_even_feasible_at_higher_utilization(self, together_pricing):
+        """At $3.99/hr, 60% util vs $1.70/M — effective rate ($1.23/M) is below
+        serverless, so break-even IS feasible."""
+        high_util_gpu = ProviderPricing(
+            name="Lambda H100 (60% util)",
+            input_rate_per_m=0.0,
+            output_rate_per_m=0.0,
+            deployment_mode="dedicated",
+            gpu_hourly_rate=3.99,
+            throughput_tps=1500,
+            utilization=0.60,
+        )
+        result = compute_break_even(together_pricing, high_util_gpu)
+
+        assert result.break_even_feasible
         assert result.break_even_daily_output_tokens > 0
-        assert result.break_even_daily_output_tokens < 1e12  # sanity upper bound
+        assert result.break_even_daily_output_tokens < 1e12
 
     def test_break_even_higher_with_lower_utilization(self, together_pricing):
         """Lower GPU utilization should push break-even higher."""
@@ -844,10 +867,15 @@ class TestYAMLDataIntegrity:
         assert len(deepinfra) > 0, "DeepInfra provider not found in YAML"
 
         di = deepinfra[0]
-        assert di.input_rate_per_m == 0.05, f"DeepInfra input rate should be $0.05/M, got {di.input_rate_per_m}"
-        assert di.output_rate_per_m == 0.45, f"DeepInfra output rate should be $0.45/M, got {di.output_rate_per_m}"
-        # Asymmetric: output should be 9x input
-        assert di.output_rate_per_m / di.input_rate_per_m == pytest.approx(9.0)
+        # [PUBLIC_PRICING] deepinfra.com/openai/gpt-oss-120b — verified 2026-05-12
+        assert di.input_rate_per_m == pytest.approx(0.039), (
+            f"DeepInfra input rate should be $0.039/M, got {di.input_rate_per_m}"
+        )
+        assert di.output_rate_per_m == pytest.approx(0.19), (
+            f"DeepInfra output rate should be $0.19/M, got {di.output_rate_per_m}"
+        )
+        # Asymmetric: output should be ~4.87x input
+        assert di.output_rate_per_m > di.input_rate_per_m
 
     def test_workload_profile_repair_costs(self):
         """saas_chat and code_completion repair_cost_per_failure should be 0.002."""
@@ -855,3 +883,489 @@ class TestYAMLDataIntegrity:
 
         assert PROFILES["saas_chat"].repair_cost_per_failure == 0.002
         assert PROFILES["code_completion"].repair_cost_per_failure == 0.002
+
+
+# --- WorkloadProfile Validation Tests ---
+
+
+class TestWorkloadProfileValidation:
+    """Tests that WorkloadProfile rejects invalid inputs at construction time."""
+
+    def _base_kwargs(self):
+        """Valid kwargs to override in individual tests."""
+        return dict(
+            avg_input_tokens=500,
+            avg_output_tokens=200,
+            monthly_requests=100_000,
+            retry_rate=0.05,
+            quality_gate_pass_rate=0.95,
+            repair_cost_per_failure=0.002,
+            engineering_hours_per_month=10,
+            engineer_hourly_cost=100,
+        )
+
+    def test_negative_input_tokens_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["avg_input_tokens"] = -1
+        with pytest.raises(ValueError, match="avg_input_tokens"):
+            WorkloadProfile(**kwargs)
+
+    def test_negative_output_tokens_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["avg_output_tokens"] = -1
+        with pytest.raises(ValueError, match="avg_output_tokens"):
+            WorkloadProfile(**kwargs)
+
+    def test_negative_monthly_requests_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["monthly_requests"] = -1
+        with pytest.raises(ValueError, match="monthly_requests"):
+            WorkloadProfile(**kwargs)
+
+    def test_retry_rate_above_one_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["retry_rate"] = 1.5
+        with pytest.raises(ValueError, match="retry_rate"):
+            WorkloadProfile(**kwargs)
+
+    def test_retry_rate_negative_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["retry_rate"] = -0.1
+        with pytest.raises(ValueError, match="retry_rate"):
+            WorkloadProfile(**kwargs)
+
+    def test_quality_gate_above_one_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["quality_gate_pass_rate"] = 1.1
+        with pytest.raises(ValueError, match="quality_gate_pass_rate"):
+            WorkloadProfile(**kwargs)
+
+    def test_quality_gate_negative_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["quality_gate_pass_rate"] = -0.1
+        with pytest.raises(ValueError, match="quality_gate_pass_rate"):
+            WorkloadProfile(**kwargs)
+
+    def test_cache_hit_rate_above_one_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["cache_hit_rate"] = 1.5
+        with pytest.raises(ValueError, match="cache_hit_rate"):
+            WorkloadProfile(**kwargs)
+
+    def test_batch_fraction_above_one_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["batch_eligible_fraction"] = 2.0
+        with pytest.raises(ValueError, match="batch_eligible_fraction"):
+            WorkloadProfile(**kwargs)
+
+    def test_prefill_efficiency_above_one_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["prefill_efficiency"] = 1.5
+        with pytest.raises(ValueError, match="prefill_efficiency"):
+            WorkloadProfile(**kwargs)
+
+    def test_negative_repair_cost_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["repair_cost_per_failure"] = -0.01
+        with pytest.raises(ValueError, match="repair_cost_per_failure"):
+            WorkloadProfile(**kwargs)
+
+    def test_negative_engineering_hours_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["engineering_hours_per_month"] = -5
+        with pytest.raises(ValueError, match="engineering_hours_per_month"):
+            WorkloadProfile(**kwargs)
+
+    def test_negative_engineer_hourly_cost_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["engineer_hourly_cost"] = -100
+        with pytest.raises(ValueError, match="engineer_hourly_cost"):
+            WorkloadProfile(**kwargs)
+
+    def test_valid_profile_accepted(self):
+        """A valid profile should construct without error."""
+        profile = WorkloadProfile(**self._base_kwargs())
+        assert profile.avg_input_tokens == 500
+
+    def test_zero_values_accepted(self):
+        """Zero tokens, zero requests, zero rates should all be valid."""
+        profile = WorkloadProfile(
+            avg_input_tokens=0,
+            avg_output_tokens=0,
+            monthly_requests=0,
+            retry_rate=0.0,
+            quality_gate_pass_rate=0.01,  # must be > 0 for division
+            repair_cost_per_failure=0.0,
+            engineering_hours_per_month=0,
+            engineer_hourly_cost=0,
+        )
+        assert profile.monthly_requests == 0
+
+    def test_boundary_rate_one_accepted(self):
+        """Rate values at exactly 1.0 should be valid."""
+        kwargs = self._base_kwargs()
+        kwargs["retry_rate"] = 1.0
+        kwargs["quality_gate_pass_rate"] = 1.0
+        kwargs["cache_hit_rate"] = 1.0
+        kwargs["batch_eligible_fraction"] = 1.0
+        kwargs["prefill_efficiency"] = 1.0
+        profile = WorkloadProfile(**kwargs)
+        assert profile.retry_rate == 1.0
+
+
+# --- YAML Schema Validation Tests ---
+
+
+class TestYAMLSchemaValidation:
+    """Tests that load_provider_pricing rejects malformed YAML data."""
+
+    def test_empty_yaml_returns_empty_list(self, tmp_path):
+        """An empty YAML file should return an empty provider list, not crash."""
+        yaml_file = tmp_path / "empty.yaml"
+        yaml_file.write_text("")
+        providers = load_provider_pricing(yaml_file)
+        assert providers == []
+
+    def test_negative_input_rate_rejected(self, tmp_path):
+        """Negative input rates should raise ValueError."""
+        yaml_file = tmp_path / "bad.yaml"
+        yaml_file.write_text("""
+closed_apis:
+  bad_provider:
+    name: "Bad"
+    models:
+      bad_model:
+        name: "Bad Model"
+        input_rate: -1.0
+        output_rate: 5.0
+""")
+        with pytest.raises(ValueError, match="negative.*rate"):
+            load_provider_pricing(yaml_file)
+
+    def test_negative_output_rate_rejected(self, tmp_path):
+        """Negative output rates should raise ValueError."""
+        yaml_file = tmp_path / "bad.yaml"
+        yaml_file.write_text("""
+serverless_open:
+  bad_provider:
+    name: "Bad"
+    models:
+      bad_model:
+        name: "Bad Model"
+        input_rate: 1.0
+        output_rate: -5.0
+""")
+        with pytest.raises(ValueError, match="negative.*rate"):
+            load_provider_pricing(yaml_file)
+
+    def test_negative_gpu_hourly_rate_rejected(self, tmp_path):
+        """Negative GPU hourly rates should raise ValueError."""
+        yaml_file = tmp_path / "bad.yaml"
+        yaml_file.write_text("""
+dedicated_gpu:
+  bad_provider:
+    name: "Bad"
+    gpus:
+      bad_gpu:
+        name: "Bad GPU"
+        hourly_rate: -2.99
+""")
+        with pytest.raises(ValueError, match="negative.*rate"):
+            load_provider_pricing(yaml_file)
+
+    def test_missing_model_name_rejected(self, tmp_path):
+        """Models without a name field should raise ValueError."""
+        yaml_file = tmp_path / "bad.yaml"
+        yaml_file.write_text("""
+closed_apis:
+  provider:
+    name: "Provider"
+    models:
+      model1:
+        input_rate: 5.0
+        output_rate: 30.0
+""")
+        with pytest.raises(ValueError, match="missing.*name"):
+            load_provider_pricing(yaml_file)
+
+    def test_null_rate_treated_as_zero(self, tmp_path):
+        """Null/missing rates in optional fields should default to 0, not crash."""
+        yaml_file = tmp_path / "ok.yaml"
+        yaml_file.write_text("""
+serverless_open:
+  provider:
+    name: "Provider"
+    models:
+      model1:
+        name: "Model"
+        input_rate: 1.0
+        output_rate: 2.0
+        cached_input_rate:
+""")
+        providers = load_provider_pricing(yaml_file)
+        assert len(providers) == 1
+        assert providers[0].cached_input_rate_per_m == 0.0
+
+
+# --- Pricing Freshness Tests ---
+# These tests pin YAML values to verified public pricing pages.
+# If a test fails, the YAML is stale and needs a re-check.
+
+
+class TestPricingFreshness:
+    """Pin provider_pricing.yaml to verified public prices.
+
+    Every assertion here corresponds to a specific vendor pricing page
+    checked on 2026-05-12. When prices change upstream, update BOTH
+    the YAML and the expected values here with the new source date.
+    """
+
+    @pytest.fixture
+    def providers(self):
+        pricing_path = Path(__file__).parent.parent / "provider_pricing.yaml"
+        return load_provider_pricing(pricing_path)
+
+    def _find(self, providers, substring):
+        matches = [p for p in providers if substring in p.name]
+        assert len(matches) > 0, f"No provider matching '{substring}' found in YAML"
+        return matches[0]
+
+    def test_openai_gpt55_rates(self, providers):
+        """[PUBLIC_PRICING] openai.com/api/pricing — verified 2026-05-12."""
+        gpt55 = self._find(providers, "GPT-5.5")
+        assert gpt55.input_rate_per_m == pytest.approx(5.00)
+        assert gpt55.output_rate_per_m == pytest.approx(30.00)
+
+    def test_openai_gpt55_cached_input(self, providers):
+        """[PUBLIC_PRICING] openai.com/api/pricing — verified 2026-05-12.
+        Cached input is $0.50/M (90% discount), not $2.50/M (50% discount)."""
+        gpt55 = self._find(providers, "GPT-5.5")
+        assert gpt55.cached_input_rate_per_m == pytest.approx(0.50), (
+            f"GPT-5.5 cached input should be $0.50/M, got ${gpt55.cached_input_rate_per_m}"
+        )
+
+    def test_together_deepseek_v3_rates(self, providers):
+        """[PUBLIC_PRICING] together.ai/pricing — verified 2026-05-12.
+        DeepSeek V3.1 is $0.60/M input, $1.70/M output (asymmetric)."""
+        dsv3 = self._find(providers, "DeepSeek")
+        assert dsv3.input_rate_per_m == pytest.approx(0.60), (
+            f"Together DeepSeek V3 input should be $0.60/M, got ${dsv3.input_rate_per_m}"
+        )
+        assert dsv3.output_rate_per_m == pytest.approx(1.70), (
+            f"Together DeepSeek V3 output should be $1.70/M, got ${dsv3.output_rate_per_m}"
+        )
+
+    def test_deepinfra_gpt_oss_120b_rates(self, providers):
+        """[PUBLIC_PRICING] deepinfra.com/openai/gpt-oss-120b — verified 2026-05-12."""
+        di = self._find(providers, "DeepInfra")
+        assert di.input_rate_per_m == pytest.approx(0.039), (
+            f"DeepInfra input should be $0.039/M, got ${di.input_rate_per_m}"
+        )
+        assert di.output_rate_per_m == pytest.approx(0.19), (
+            f"DeepInfra output should be $0.19/M, got ${di.output_rate_per_m}"
+        )
+
+    def test_lambda_h100_hourly_rate(self, providers):
+        """[PUBLIC_PRICING] lambda.ai/pricing — verified 2026-05-12.
+        H100 SXM 80GB on-demand is $3.99/hr (8-GPU config)."""
+        lambda_gpu = self._find(providers, "Lambda")
+        assert lambda_gpu.gpu_hourly_rate == pytest.approx(3.99), (
+            f"Lambda H100 should be $3.99/hr, got ${lambda_gpu.gpu_hourly_rate}"
+        )
+
+
+# --- Break-Even Capacity-Aware Tests ---
+
+
+class TestBreakEvenCapacityAware:
+    """Tests for the capacity-aware break-even model.
+
+    The old model had a bug: it divided break-even by utilization when
+    one GPU couldn't reach the theoretical volume, but still returned
+    one-GPU daily cost. The correct model reports whether break-even
+    is feasible at the given utilization and computes effective $/M.
+    """
+
+    def test_no_break_even_when_dedicated_rate_exceeds_serverless(self):
+        """At $3.99/hr, 40% util, 1500 tok/s vs $1.70/M serverless:
+        effective dedicated rate = $3.99*24 / (1500*0.4*86400/1M) = $1.848/M.
+        Since $1.848 > $1.70, dedicated is always more expensive — no break-even."""
+        serverless = ProviderPricing(
+            name="Together DeepSeek V3",
+            input_rate_per_m=0.60,
+            output_rate_per_m=1.70,
+            deployment_mode="serverless_open",
+        )
+        dedicated = ProviderPricing(
+            name="Lambda H100",
+            input_rate_per_m=0.0,
+            output_rate_per_m=0.0,
+            deployment_mode="dedicated",
+            gpu_hourly_rate=3.99,
+            throughput_tps=1500,
+            utilization=0.40,
+        )
+        result = compute_break_even(serverless, dedicated)
+        # Break-even should NOT be feasible at this utilization
+        assert not result.break_even_feasible, (
+            f"Expected no break-even: effective dedicated $/M ({result.effective_cost_per_m:.3f}) "
+            f"> serverless $/M ($1.70)"
+        )
+        # Effective cost per M should be reported
+        assert result.effective_cost_per_m > 1.70
+        # Required utilization should be above the stated utilization
+        assert result.required_utilization > 0.40
+
+    def test_break_even_feasible_at_high_utilization(self):
+        """At $3.99/hr and 60% utilization, effective rate = $3.99*24 / (1500*0.6*86400/1M)
+        = $95.76 / 77.76 = $1.231/M. Since $1.231 < $1.70, break-even IS feasible."""
+        serverless = ProviderPricing(
+            name="Together DeepSeek V3",
+            input_rate_per_m=0.60,
+            output_rate_per_m=1.70,
+            deployment_mode="serverless_open",
+        )
+        dedicated = ProviderPricing(
+            name="Lambda H100",
+            input_rate_per_m=0.0,
+            output_rate_per_m=0.0,
+            deployment_mode="dedicated",
+            gpu_hourly_rate=3.99,
+            throughput_tps=1500,
+            utilization=0.60,
+        )
+        result = compute_break_even(serverless, dedicated)
+        assert result.break_even_feasible, (
+            f"Expected break-even feasible: effective $/M ({result.effective_cost_per_m:.3f}) "
+            f"< serverless $1.70/M"
+        )
+        assert result.effective_cost_per_m < 1.70
+
+    def test_required_utilization_reported(self):
+        """Required utilization to break even at $3.99/hr vs $1.70/M should be ~43.5%."""
+        serverless = ProviderPricing(
+            name="Together DeepSeek V3",
+            input_rate_per_m=0.60,
+            output_rate_per_m=1.70,
+            deployment_mode="serverless_open",
+        )
+        dedicated = ProviderPricing(
+            name="Lambda H100",
+            input_rate_per_m=0.0,
+            output_rate_per_m=0.0,
+            deployment_mode="dedicated",
+            gpu_hourly_rate=3.99,
+            throughput_tps=1500,
+            utilization=0.40,
+        )
+        result = compute_break_even(serverless, dedicated)
+        # required_utilization = (gpu_cost_per_day / serverless_rate) / (tps * 86400)
+        # = (95.76 / 0.0000017) / (1500 * 86400) = 56_329_412 / 129_600_000 = 0.4347
+        assert 0.42 < result.required_utilization < 0.46, (
+            f"Expected required utilization ~0.435, got {result.required_utilization:.3f}"
+        )
+
+    def test_effective_capacity_tokens_per_day(self):
+        """At 1500 tok/s and 40% utilization: 1500 * 0.4 * 86400 = 51.84M tokens/day."""
+        serverless = ProviderPricing(
+            name="Together DeepSeek V3",
+            input_rate_per_m=0.60,
+            output_rate_per_m=1.70,
+            deployment_mode="serverless_open",
+        )
+        dedicated = ProviderPricing(
+            name="Lambda H100",
+            input_rate_per_m=0.0,
+            output_rate_per_m=0.0,
+            deployment_mode="dedicated",
+            gpu_hourly_rate=3.99,
+            throughput_tps=1500,
+            utilization=0.40,
+        )
+        result = compute_break_even(serverless, dedicated)
+        expected_capacity = 1500 * 0.40 * 86400
+        assert math.isclose(result.effective_capacity_tokens_per_day, expected_capacity, rel_tol=0.001)
+
+
+class TestQualityAdjustedLCPR:
+    """Test that quality_score on ProviderPricing adjusts effective quality gate."""
+
+    def test_quality_score_one_has_no_effect(self, simple_profile, openai_pricing):
+        """quality_score=1.0 should produce identical LCPR to no quality_score."""
+        baseline = compute_lcpr(simple_profile, openai_pricing)
+        scored = compute_lcpr(simple_profile, ProviderPricing(
+            name="OpenAI GPT-5.5",
+            input_rate_per_m=5.00,
+            output_rate_per_m=30.00,
+            deployment_mode="closed_api",
+            quality_score=1.0,
+        ))
+        assert math.isclose(baseline.lcpr, scored.lcpr, rel_tol=0.001)
+
+    def test_quality_score_below_one_increases_lcpr(self, simple_profile):
+        """Lower quality_score means more quality gate failures, higher LCPR."""
+        high_quality = ProviderPricing(
+            name="High Quality",
+            input_rate_per_m=0.60,
+            output_rate_per_m=1.70,
+            deployment_mode="serverless_open",
+            quality_score=1.0,
+        )
+        low_quality = ProviderPricing(
+            name="Low Quality",
+            input_rate_per_m=0.60,
+            output_rate_per_m=1.70,
+            deployment_mode="serverless_open",
+            quality_score=0.8,
+        )
+        r_high = compute_lcpr(simple_profile, high_quality)
+        r_low = compute_lcpr(simple_profile, low_quality)
+        assert r_low.lcpr > r_high.lcpr
+
+    def test_quality_score_zero_raises(self, simple_profile):
+        """quality_score=0.0 would zero out quality gate; should raise."""
+        zero_quality = ProviderPricing(
+            name="Zero Quality",
+            input_rate_per_m=0.60,
+            output_rate_per_m=1.70,
+            deployment_mode="serverless_open",
+            quality_score=0.0,
+        )
+        with pytest.raises(ValueError):
+            compute_lcpr(simple_profile, zero_quality)
+
+    def test_quality_score_affects_dedicated_mode(self):
+        """quality_score should also affect dedicated LCPR calculations."""
+        profile = WorkloadProfile(
+            avg_input_tokens=500,
+            avg_output_tokens=200,
+            monthly_requests=5_000_000,
+            retry_rate=0.05,
+            quality_gate_pass_rate=0.95,
+            repair_cost_per_failure=0.002,
+            engineering_hours_per_month=40,
+            engineer_hourly_cost=100,
+        )
+        good_gpu = ProviderPricing(
+            name="Good GPU",
+            input_rate_per_m=0.0,
+            output_rate_per_m=0.0,
+            deployment_mode="dedicated",
+            gpu_hourly_rate=3.99,
+            throughput_tps=1500,
+            utilization=0.40,
+            quality_score=1.0,
+        )
+        weak_gpu = ProviderPricing(
+            name="Weak GPU",
+            input_rate_per_m=0.0,
+            output_rate_per_m=0.0,
+            deployment_mode="dedicated",
+            gpu_hourly_rate=3.99,
+            throughput_tps=1500,
+            utilization=0.40,
+            quality_score=0.85,
+        )
+        r_good = compute_lcpr(profile, good_gpu)
+        r_weak = compute_lcpr(profile, weak_gpu)
+        assert r_weak.lcpr > r_good.lcpr

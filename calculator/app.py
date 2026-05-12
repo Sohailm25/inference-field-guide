@@ -7,6 +7,8 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
+import yaml
+
 # Ensure project root is on sys.path (needed when not pip-installed)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -15,7 +17,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from calculator.lcpr import (
+    HOURS_PER_MONTH,
     LCPRCalculator,
+    SECONDS_PER_MONTH,
     WorkloadProfile,
     compute_break_even,
     compute_lcpr,
@@ -27,6 +31,8 @@ from calculator.readiness import (
     compute_readiness,
     get_engineering_hours,
 )
+from calculator.confidence import VALID_STATUSES, default_confidence
+from calculator.permalink import decode_profile, encode_profile
 from calculator.workload_profiles import PROFILES, get_profile, list_profiles
 
 PRICING_PATH = Path(__file__).parent / "provider_pricing.yaml"
@@ -64,6 +70,19 @@ def _build_profile_from_sidebar() -> tuple[WorkloadProfile, str]:
         retry_rate = st.sidebar.slider("Retry rate", 0.0, 0.50, 0.03, step=0.01)
         quality_gate = st.sidebar.slider("Quality gate pass rate", 0.50, 1.0, 0.95, step=0.01)
         cache_hit_rate = st.sidebar.slider("Cache hit rate", 0.0, 1.0, 0.0, step=0.05)
+        batch_fraction = st.sidebar.slider(
+            "Batch eligible fraction", 0.0, 1.0, 0.0, step=0.05,
+            help="Fraction of requests eligible for batch API pricing",
+        )
+        prefill_eff = st.sidebar.slider(
+            "Prefill efficiency", 0.0, 0.50, 0.0, step=0.05,
+            help="Fraction of prefill compute displacing decode throughput (>8K input)",
+        )
+        repair_cost = st.sidebar.number_input(
+            "Repair cost per failure ($)", min_value=0.0, max_value=1.0,
+            value=0.002, step=0.001, format="%.3f",
+            help="Cost to re-prompt a request that fails quality/schema gates",
+        )
         eng_hours = st.sidebar.slider("Engineering hours/month", 0, 80, 8)
         eng_rate = st.sidebar.slider("Engineer hourly cost ($)", 50, 250, 100, step=10)
 
@@ -73,10 +92,12 @@ def _build_profile_from_sidebar() -> tuple[WorkloadProfile, str]:
             monthly_requests=monthly_requests,
             retry_rate=retry_rate,
             quality_gate_pass_rate=quality_gate,
-            repair_cost_per_failure=0.002,
+            repair_cost_per_failure=repair_cost,
             engineering_hours_per_month=eng_hours,
             engineer_hourly_cost=eng_rate,
             cache_hit_rate=cache_hit_rate,
+            batch_eligible_fraction=batch_fraction,
+            prefill_efficiency=prefill_eff,
         )
     else:
         idx = labels.index(choice)
@@ -108,12 +129,34 @@ def _build_profile_from_sidebar() -> tuple[WorkloadProfile, str]:
             "Quality gate pass rate", 0.50, 1.0,
             profile.quality_gate_pass_rate, step=0.01,
         )
+        cache_hit_rate = st.sidebar.slider(
+            "Cache hit rate", 0.0, 1.0, profile.cache_hit_rate, step=0.05,
+        )
+        batch_fraction = st.sidebar.slider(
+            "Batch eligible fraction", 0.0, 1.0,
+            profile.batch_eligible_fraction, step=0.05,
+            help="Fraction of requests eligible for batch API pricing",
+        )
+        prefill_eff = st.sidebar.slider(
+            "Prefill efficiency", 0.0, 0.50,
+            profile.prefill_efficiency, step=0.05,
+            help="Fraction of prefill compute displacing decode throughput (>8K input)",
+        )
+        repair_cost = st.sidebar.number_input(
+            "Repair cost per failure ($)", min_value=0.0, max_value=1.0,
+            value=profile.repair_cost_per_failure, step=0.001, format="%.3f",
+            help="Cost to re-prompt a request that fails quality/schema gates",
+        )
 
         profile = replace(
             profile,
             monthly_requests=monthly_requests,
             retry_rate=retry_rate,
             quality_gate_pass_rate=quality_gate,
+            cache_hit_rate=cache_hit_rate,
+            batch_eligible_fraction=batch_fraction,
+            prefill_efficiency=prefill_eff,
+            repair_cost_per_failure=repair_cost,
         )
 
     return profile, profile_name
@@ -179,10 +222,10 @@ def _raw_cost_per_request(
     for p in calc.providers:
         if p.name == provider_name:
             if p.deployment_mode == "dedicated":
-                monthly_gpu = p.gpu_hourly_rate * 24 * 30
+                monthly_gpu = p.gpu_hourly_rate * HOURS_PER_MONTH
                 eff_tps = p.throughput_tps * (p.utilization or 0.4)
                 if eff_tps > 0:
-                    monthly_capacity = eff_tps * 3600 * 24 * 30
+                    monthly_capacity = eff_tps * SECONDS_PER_MONTH
                     tokens_needed = profile.avg_output_tokens * profile.monthly_requests
                     import math
                     gpus = max(1, math.ceil(tokens_needed / monthly_capacity))
@@ -327,19 +370,34 @@ def _tab_breakeven(calc: LCPRCalculator) -> None:
 
     st.markdown("---")
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(
-            "Break-even",
-            f"{result.break_even_daily_output_tokens / 1_000_000:.1f}M tokens/day",
+    if result.break_even_feasible:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(
+                "Break-even",
+                f"{result.break_even_daily_output_tokens / 1_000_000:.1f}M tokens/day",
+            )
+        with col2:
+            st.metric("Daily GPU cost", f"${result.dedicated_daily_cost:.2f}")
+        with col3:
+            st.metric(
+                "Serverless cost at break-even",
+                f"${result.serverless_daily_cost_at_break_even:.2f}",
+            )
+    else:
+        st.warning(
+            f"**No break-even at {ded.utilization:.0%} utilization.** "
+            f"Effective dedicated cost is ${result.effective_cost_per_m:.2f}/M tokens, "
+            f"which exceeds the serverless rate of ${sl.output_rate_per_m:.2f}/M. "
+            f"Required utilization for break-even: {result.required_utilization:.0%}."
         )
-    with col2:
-        st.metric("Daily GPU cost", f"${result.dedicated_daily_cost:.2f}")
-    with col3:
-        st.metric(
-            "Serverless cost at break-even",
-            f"${result.serverless_daily_cost_at_break_even:.2f}",
-        )
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Effective $/M (dedicated)", f"${result.effective_cost_per_m:.2f}")
+        with col2:
+            st.metric("Daily GPU cost", f"${result.dedicated_daily_cost:.2f}")
+        with col3:
+            st.metric("Required utilization", f"{result.required_utilization:.0%}")
 
     # Volume input
     st.markdown("---")
@@ -351,7 +409,12 @@ def _tab_breakeven(calc: LCPRCalculator) -> None:
 
     # Cost vs volume chart
     import numpy as np
-    volumes = np.linspace(0, result.break_even_daily_output_tokens * 2, 100)
+    if result.break_even_feasible:
+        chart_max = result.break_even_daily_output_tokens * 2
+    else:
+        # Show chart up to GPU capacity to illustrate the gap
+        chart_max = result.effective_capacity_tokens_per_day * 2
+    volumes = np.linspace(0, chart_max, 100)
     sl_rate = sl.output_rate_per_m / 1_000_000
     ded_daily = result.dedicated_daily_cost
 
@@ -368,15 +431,26 @@ def _tab_breakeven(calc: LCPRCalculator) -> None:
         line=dict(color=DEPLOYMENT_COLORS["dedicated"], dash="dash"),
     ))
 
-    # Crossover annotation
-    be_m = result.break_even_daily_output_tokens / 1_000_000
-    fig.add_vline(x=be_m, line_dash="dot", line_color="#e74c3c", opacity=0.5)
-    fig.add_annotation(
-        x=be_m, y=ded_daily,
-        text=f"Break-even: {be_m:.1f}M tokens/day",
-        showarrow=True, arrowhead=2,
-        font=dict(color="#e8e8e8"),
-    )
+    if result.break_even_feasible:
+        # Crossover annotation
+        be_m = result.break_even_daily_output_tokens / 1_000_000
+        fig.add_vline(x=be_m, line_dash="dot", line_color="#e74c3c", opacity=0.5)
+        fig.add_annotation(
+            x=be_m, y=ded_daily,
+            text=f"Break-even: {be_m:.1f}M tokens/day",
+            showarrow=True, arrowhead=2,
+            font=dict(color="#e8e8e8"),
+        )
+    else:
+        # Capacity limit annotation
+        cap_m = result.effective_capacity_tokens_per_day / 1_000_000
+        fig.add_vline(x=cap_m, line_dash="dot", line_color="#f39c12", opacity=0.5)
+        fig.add_annotation(
+            x=cap_m, y=ded_daily,
+            text=f"GPU capacity: {cap_m:.1f}M tokens/day",
+            showarrow=True, arrowhead=2,
+            font=dict(color="#e8e8e8"),
+        )
 
     # Your volume marker
     your_m = your_volume / 1_000_000
@@ -803,7 +877,79 @@ def main() -> None:
         )
 
     calc = LCPRCalculator(PRICING_PATH)
+
+    # Load profile from permalink query param if present
+    _config_param = st.query_params.get("config")
+    _permalink_profile = None
+    if _config_param:
+        try:
+            _permalink_profile = decode_profile(_config_param)
+            st.info("Loaded profile from shared link. Adjust in sidebar to override.")
+        except (ValueError, Exception):
+            st.warning("Invalid shared link — using default profile.")
+
     profile, profile_name = _build_profile_from_sidebar()
+
+    # If permalink loaded, override sidebar profile (sidebar defaults win on next interaction)
+    if _permalink_profile is not None and "config" in st.query_params:
+        profile = _permalink_profile
+        profile_name = "shared"
+
+    # Share button
+    st.sidebar.markdown("---")
+    _encoded = encode_profile(profile)
+    _share_url = f"https://inference-field-guide.streamlit.app/?config={_encoded}"
+    st.sidebar.text_input("Share this config", value=_share_url, help="Copy this URL to share your current workload profile.")
+
+    # Assumption confidence tracker
+    _confidence = default_confidence()
+    _status_options = sorted(VALID_STATUSES)
+    with st.sidebar.expander("Assumption Confidence", expanded=False):
+        st.markdown(
+            "Tag each input with how it was measured. "
+            "An LCPR built on assumptions is a hypothesis; "
+            "one built on measurements is a budget."
+        )
+        for field in _confidence.statuses:
+            label = field.replace("_", " ").title()
+            new_status = st.selectbox(
+                label, options=_status_options,
+                index=_status_options.index("assumed"),
+                key=f"conf_{field}",
+            )
+            _confidence.set(field, new_status)
+        measured = _confidence.measured_count
+        total = len(_confidence.statuses)
+        st.progress(measured / total if total else 0)
+        st.caption(f"{measured}/{total} inputs measured")
+
+    # Pricing snapshot panel
+    with st.expander("Pricing Data (click to verify)", expanded=False):
+        _pricing_data = yaml.safe_load(PRICING_PATH.read_text()) or {}
+        _verified = _pricing_data.get("_meta", {}).get("last_verified", "unknown")
+        # Extract verification date from YAML comment (line 4)
+        _yaml_lines = PRICING_PATH.read_text().splitlines()
+        for _line in _yaml_lines[:10]:
+            if "Last verified:" in _line:
+                _verified = _line.split("Last verified:")[-1].strip()
+                break
+        st.markdown(f"**Data last verified: {_verified}**")
+        st.markdown("All prices from public vendor pricing pages. "
+                     "[Report stale pricing →]"
+                     "(https://github.com/sohailm25/inference-field-guide/issues)")
+        providers = calc.providers
+        rows = []
+        for p in providers:
+            if p.deployment_mode == "dedicated":
+                price_str = f"${p.gpu_hourly_rate:.2f}/hr GPU"
+            else:
+                price_str = f"${p.input_rate_per_m:.2f} / ${p.output_rate_per_m:.2f}"
+            rows.append({
+                "Provider": p.name,
+                "Mode": p.deployment_mode.replace("_", " ").title(),
+                "Pricing (input/output per M tokens)": price_str,
+            })
+        st.table(rows)
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "LCPR Comparison",

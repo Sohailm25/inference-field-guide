@@ -45,24 +45,26 @@ def gpt55():
 
 @pytest.fixture
 def together_dsv3():
-    """Together DeepSeek V3 serverless: $1.25/$1.25 per M [PUBLIC]."""
+    """Together DeepSeek V3 serverless: $0.60/$1.70 per M.
+    [PUBLIC_PRICING] together.ai/pricing — verified 2026-05-12."""
     return ProviderPricing(
         name="Together DeepSeek V3",
-        input_rate_per_m=1.25,
-        output_rate_per_m=1.25,
+        input_rate_per_m=0.60,
+        output_rate_per_m=1.70,
         deployment_mode="serverless_open",
     )
 
 
 @pytest.fixture
 def lambda_h100():
-    """Lambda H100 dedicated: $2.99/hr, 1500 tok/s theoretical, 40% util [PUBLIC]."""
+    """Lambda H100 dedicated: $3.99/hr, 1500 tok/s theoretical, 40% util.
+    [PUBLIC_PRICING] lambda.ai/pricing — verified 2026-05-12."""
     return ProviderPricing(
         name="Lambda H100",
         input_rate_per_m=0.0,
         output_rate_per_m=0.0,
         deployment_mode="dedicated",
-        gpu_hourly_rate=2.99,
+        gpu_hourly_rate=3.99,
         throughput_tps=1500,
         utilization=0.40,
     )
@@ -82,7 +84,7 @@ class TestEssayPart0CostIllusion:
     def test_together_lcpr_range(self, essay_workload, together_dsv3):
         """Together DeepSeek V3 LCPR should be dramatically cheaper than GPT-5.5."""
         result = compute_lcpr(essay_workload, together_dsv3)
-        # At $1.25/$1.25: raw = (800*1.25/1M) + (400*1.25/1M) = 0.001 + 0.0005 = $0.0015
+        # At $0.60/$1.70: raw = (800*0.60/1M) + (400*1.70/1M) = 0.00048 + 0.00068 = $0.00116
         # With overhead → ~$0.003-$0.005
         assert 0.002 < result.lcpr < 0.006
 
@@ -100,10 +102,10 @@ class TestEssayPart0CostIllusion:
         """Dedicated H100 at this volume — should be more expensive than serverless
         (500K req × 400 output tokens = 200M tokens/month, not enough to justify dedicated)."""
         result = compute_lcpr(essay_workload, lambda_h100)
-        # GPU cost is fixed at $2.99*24*30 = $2,152.80/month regardless of volume
-        # At 500K requests that's ~$0.004-$0.006 per successful request
+        # GPU cost is fixed at $3.99*24*30 = $2,872.80/month regardless of volume
+        # At 500K requests that's ~$0.006-$0.008 per successful request
         assert result.lcpr > 0
-        assert result.monthly_cost > 2000  # At minimum the GPU cost
+        assert result.monthly_cost > 2800  # At minimum the GPU cost
 
 
 class TestEssayPart1MigrationGate:
@@ -136,14 +138,34 @@ class TestEssayPart1MigrationGate:
         # Together is still cheaper
         assert together_result.monthly_cost < gpt_result.monthly_cost
 
-    def test_break_even_daily_tokens_order_of_magnitude(self, together_dsv3, lambda_h100):
-        """Against Together at $1.25/M with Lambda at $2.99/hr, break-even should be
-        in the hundreds-of-millions range (adjusted for utilization)."""
+    def test_break_even_infeasible_at_40pct_utilization(self, together_dsv3, lambda_h100):
+        """At $3.99/hr, 40% util vs $1.70/M serverless — effective dedicated rate
+        ($1.848/M) exceeds serverless, so break-even is not feasible on one GPU."""
         result = compute_break_even(together_dsv3, lambda_h100)
+        assert not result.break_even_feasible, (
+            f"Expected no break-even: effective $/M ({result.effective_cost_per_m:.3f}) "
+            f"> serverless $1.70/M"
+        )
+        # Required utilization to break even should be ~43.5%
+        assert result.required_utilization > 0.40
+
+    def test_break_even_feasible_at_50pct_utilization(self, together_dsv3):
+        """At $3.99/hr, 50% util vs $1.70/M — effective rate ($1.478/M) is below
+        serverless, so break-even IS feasible. Volume ~56M tokens/day."""
+        h100_50pct = ProviderPricing(
+            name="Lambda H100 (50% util)",
+            input_rate_per_m=0.0,
+            output_rate_per_m=0.0,
+            deployment_mode="dedicated",
+            gpu_hourly_rate=3.99,
+            throughput_tps=1500,
+            utilization=0.50,
+        )
+        result = compute_break_even(together_dsv3, h100_50pct)
+        assert result.break_even_feasible
         daily_tokens = result.break_even_daily_output_tokens
-        # Should be in 50M-500M range (adjusted for utilization)
         assert daily_tokens > 10_000_000, f"Break-even too low: {daily_tokens:,.0f}"
-        assert daily_tokens < 1_000_000_000, f"Break-even too high: {daily_tokens:,.0f}"
+        assert daily_tokens < 200_000_000, f"Break-even too high: {daily_tokens:,.0f}"
 
     def test_fireworks_break_even_at_full_util(self):
         """H100 at $2.01/hr vs Fireworks $0.90/M serverless: break-even is
@@ -224,19 +246,22 @@ class TestEssayPart3BuildBuy:
     """
 
     def test_neo_cloud_vs_hyperscaler_savings(self):
-        """Lambda at $2.99/hr vs AWS at $4.975/hr (per GPU) — verify savings %."""
-        lambda_rate = 2.99
+        """Lambda at $3.99/hr vs AWS at $4.975/hr (per GPU) — verify savings %.
+        Note: at corrected pricing, savings are ~20%, well below the essay's
+        original "40-85%" claim. Essay needs correction in Phase 4/6."""
+        lambda_rate = 3.99  # [PUBLIC_PRICING] lambda.ai/pricing — verified 2026-05-12
         aws_rate = 4.975  # p5e.48xlarge per-GPU
         savings_pct = (1 - lambda_rate / aws_rate) * 100
-        # Essay claims 40-85% cheaper
-        assert savings_pct > 35, f"Savings only {savings_pct:.0f}%"
-        assert savings_pct < 90, f"Savings {savings_pct:.0f}% seems too high"
+        # Corrected: Lambda is ~20% cheaper than AWS, not 40-85%
+        assert savings_pct > 15, f"Savings only {savings_pct:.0f}%"
+        assert savings_pct < 30, f"Savings {savings_pct:.0f}% seems too high"
 
     def test_dedicated_gpu_monthly_cost_range(self):
         """Verify monthly GPU costs are in the ranges cited."""
-        # Lambda H100: $2.99/hr → ~$2,153/month
-        lambda_monthly = 2.99 * 24 * 30
-        assert 2100 < lambda_monthly < 2200
+        # Lambda H100: $3.99/hr → ~$2,873/month
+        # [PUBLIC_PRICING] lambda.ai/pricing — verified 2026-05-12
+        lambda_monthly = 3.99 * 24 * 30
+        assert 2800 < lambda_monthly < 2950
 
         # AWS per-GPU: $4.975/hr → ~$3,582/month
         aws_monthly = 4.975 * 24 * 30
@@ -283,7 +308,7 @@ class TestEssayPart5StagedPlaybook:
             input_rate_per_m=0.0,
             output_rate_per_m=0.0,
             deployment_mode="dedicated",
-            gpu_hourly_rate=2.99,
+            gpu_hourly_rate=3.99,
             throughput_tps=1500,
             utilization=0.20,
         )
@@ -330,14 +355,14 @@ _GPT55 = ProviderPricing(
 )
 _TOGETHER = ProviderPricing(
     name="Together DeepSeek V3",
-    input_rate_per_m=1.25,
-    output_rate_per_m=1.25,
+    input_rate_per_m=0.60,  # [PUBLIC_PRICING] together.ai/pricing — verified 2026-05-12
+    output_rate_per_m=1.70,  # [PUBLIC_PRICING] together.ai/pricing — verified 2026-05-12
     deployment_mode="serverless_open",
 )
 _DEEPINFRA = ProviderPricing(
-    name="DeepInfra DeepSeek V3",
-    input_rate_per_m=0.05,
-    output_rate_per_m=0.45,
+    name="DeepInfra GPT-OSS-120B",
+    input_rate_per_m=0.039,  # [PUBLIC_PRICING] deepinfra.com/openai/gpt-oss-120b — verified 2026-05-12
+    output_rate_per_m=0.19,  # [PUBLIC_PRICING] deepinfra.com/openai/gpt-oss-120b — verified 2026-05-12
     deployment_mode="serverless_open",
 )
 
@@ -360,40 +385,40 @@ class TestEssayPart0ExactNumbers:
         )
 
     def test_together_lcpr(self):
-        """Together DeepSeek V3 LCPR = $0.0034 per successful request."""
+        """Together DeepSeek V3 LCPR = $0.003047 per successful request."""
         result = compute_lcpr(PART0_SAAS, _TOGETHER)
-        assert math.isclose(result.lcpr, 0.0034, rel_tol=0.005), (
-            f"Expected LCPR ~$0.0034, got ${result.lcpr:.4f}"
+        assert math.isclose(result.lcpr, 0.003047, rel_tol=0.005), (
+            f"Expected LCPR ~$0.003047, got ${result.lcpr:.6f}"
         )
 
     def test_together_monthly(self):
-        """Together monthly cost = $1,622.50."""
+        """Together monthly cost = $1,447.40."""
         result = compute_lcpr(PART0_SAAS, _TOGETHER)
-        assert math.isclose(result.monthly_cost, 1622.50, rel_tol=0.005), (
-            f"Expected monthly ~$1,622.50, got ${result.monthly_cost:,.2f}"
+        assert math.isclose(result.monthly_cost, 1447.40, rel_tol=0.005), (
+            f"Expected monthly ~$1,447.40, got ${result.monthly_cost:,.2f}"
         )
 
     def test_deepinfra_lcpr(self):
-        """DeepInfra LCPR = ~$0.00203 per successful request."""
+        """DeepInfra LCPR = ~$0.001906 per successful request."""
         result = compute_lcpr(PART0_SAAS, _DEEPINFRA)
-        assert math.isclose(result.lcpr, 0.002028, rel_tol=0.005), (
-            f"Expected LCPR ~$0.00203, got ${result.lcpr:.6f}"
+        assert math.isclose(result.lcpr, 0.001906, rel_tol=0.005), (
+            f"Expected LCPR ~$0.001906, got ${result.lcpr:.6f}"
         )
 
     def test_deepinfra_monthly(self):
-        """DeepInfra monthly cost = $963.30."""
+        """DeepInfra monthly cost = $905.21."""
         result = compute_lcpr(PART0_SAAS, _DEEPINFRA)
-        assert math.isclose(result.monthly_cost, 963.30, rel_tol=0.005), (
-            f"Expected monthly ~$963.30, got ${result.monthly_cost:,.2f}"
+        assert math.isclose(result.monthly_cost, 905.21, rel_tol=0.005), (
+            f"Expected monthly ~$905.21, got ${result.monthly_cost:,.2f}"
         )
 
     def test_gpt55_vs_together_ratio(self):
-        """GPT-5.5 / Together LCPR ratio = ~5.6x at baseline."""
+        """GPT-5.5 / Together LCPR ratio = ~6.3x at baseline."""
         gpt_result = compute_lcpr(PART0_SAAS, _GPT55)
         tog_result = compute_lcpr(PART0_SAAS, _TOGETHER)
         ratio = gpt_result.lcpr / tog_result.lcpr
-        assert math.isclose(ratio, 5.60, rel_tol=0.01), (
-            f"Expected ~5.60x, got {ratio:.2f}x"
+        assert math.isclose(ratio, 6.28, rel_tol=0.01), (
+            f"Expected ~6.28x, got {ratio:.2f}x"
         )
 
 
@@ -408,19 +433,19 @@ class TestEssayPart1ExactNumbers:
         )
 
     def test_b2b_together_monthly(self):
-        """B2B workload on Together monthly cost = $2,903."""
+        """B2B workload on Together monthly cost = $2,546."""
         result = compute_lcpr(PART1_B2B, _TOGETHER)
-        assert math.isclose(result.monthly_cost, 2903.00, rel_tol=0.005), (
-            f"Expected monthly ~$2,903, got ${result.monthly_cost:,.2f}"
+        assert math.isclose(result.monthly_cost, 2546.00, rel_tol=0.005), (
+            f"Expected monthly ~$2,546, got ${result.monthly_cost:,.2f}"
         )
 
     def test_b2b_savings(self):
-        """Switching B2B from GPT-5.5 to Together saves $15,225/month."""
+        """Switching B2B from GPT-5.5 to Together saves $15,582/month."""
         gpt_result = compute_lcpr(PART1_B2B, _GPT55)
         tog_result = compute_lcpr(PART1_B2B, _TOGETHER)
         savings = gpt_result.monthly_cost - tog_result.monthly_cost
-        assert math.isclose(savings, 15225.00, rel_tol=0.005), (
-            f"Expected savings ~$15,225, got ${savings:,.2f}"
+        assert math.isclose(savings, 15582.00, rel_tol=0.005), (
+            f"Expected savings ~$15,582, got ${savings:,.2f}"
         )
 
 
@@ -428,21 +453,21 @@ class TestEssaySensitivity:
     """Exact-match tests for sensitivity analysis claims in the essay."""
 
     def test_high_retry_ratio(self):
-        """At 20% retry rate, GPT/Together LCPR ratio = ~6.0x."""
+        """At 20% retry rate, GPT/Together LCPR ratio = ~6.8x."""
         gpt_result = compute_lcpr(PART0_HIGH_RETRY, _GPT55)
         tog_result = compute_lcpr(PART0_HIGH_RETRY, _TOGETHER)
         ratio = gpt_result.lcpr / tog_result.lcpr
-        assert math.isclose(ratio, 5.97, rel_tol=0.01), (
-            f"Expected ~5.97x (approx 6.0x), got {ratio:.2f}x"
+        assert math.isclose(ratio, 6.76, rel_tol=0.01), (
+            f"Expected ~6.76x, got {ratio:.2f}x"
         )
 
     def test_low_gate_ratio(self):
-        """At 70% quality gate, GPT/Together LCPR ratio = ~5.0x."""
+        """At 70% quality gate, GPT/Together LCPR ratio = ~5.5x."""
         gpt_result = compute_lcpr(PART0_LOW_GATE, _GPT55)
         tog_result = compute_lcpr(PART0_LOW_GATE, _TOGETHER)
         ratio = gpt_result.lcpr / tog_result.lcpr
-        assert math.isclose(ratio, 4.99, rel_tol=0.01), (
-            f"Expected ~4.99x (approx 5.0x), got {ratio:.2f}x"
+        assert math.isclose(ratio, 5.50, rel_tol=0.01), (
+            f"Expected ~5.50x, got {ratio:.2f}x"
         )
 
     def test_quality_gate_10_point_drop_increases_lcpr_13_pct(self):

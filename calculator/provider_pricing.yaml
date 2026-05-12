@@ -1,7 +1,7 @@
 # ABOUTME: Current provider pricing data for LCPR calculations.
 # ABOUTME: All prices from public pricing pages as of May 2026. Update via PR with evidence.
 #
-# Last verified: 2026-05-11
+# Last verified: 2026-05-12
 # Evidence tags: [PUBLIC] = vendor pricing page, [REPORTED] = third-party source
 #
 # Rates are per million tokens unless otherwise noted.
@@ -15,7 +15,7 @@ closed_apis:
         name: "GPT-5.5"
         input_rate: 5.00       # [PUBLIC] $5.00/M input — verified 2026-05-11
         output_rate: 30.00     # [PUBLIC] $30.00/M output — verified 2026-05-11
-        cached_input_rate: 2.50  # [PUBLIC] 50% discount, automatic on >=1024 tokens
+        cached_input_rate: 0.50  # [PUBLIC_PRICING] openai.com/api/pricing — verified 2026-05-12, 90% discount
         batch_input_rate: 2.50   # [PUBLIC] Batch/Flex 50% discount
         batch_output_rate: 15.00
         priority_input_rate: 12.50   # [PUBLIC] Priority tier 2.5x
@@ -28,7 +28,7 @@ closed_apis:
         input_rate: 0.30
         output_rate: 1.50
         cached_input_rate: 0.15
-        notes: "[MODELED] Estimated from prior generation patterns — no public confirmation"
+        notes: "[UNVERIFIED] No public GPT-5.5 Mini found as of 2026-05-12. GPT-5.4 mini is $0.75/$4.50. These rates are estimated from prior generation patterns and MUST NOT be cited as public fact."
 
   anthropic:
     name: "Anthropic"
@@ -71,8 +71,8 @@ serverless_open:
     models:
       deepseek_v3:
         name: "DeepSeek V3 / V3.1"
-        input_rate: 1.25       # [PUBLIC] verified 2026-05-11 (may be blended/symmetric rate)
-        output_rate: 1.25      # [PUBLIC]
+        input_rate: 0.60       # [PUBLIC_PRICING] together.ai/pricing — verified 2026-05-12
+        output_rate: 1.70      # [PUBLIC_PRICING] together.ai/pricing — verified 2026-05-12
       llama_3_3_70b:
         name: "Llama 3.3 70B"
         input_rate: 0.88       # [PUBLIC] flat rate
@@ -110,9 +110,9 @@ serverless_open:
     models:
       gpt_oss_120b:
         name: "GPT-OSS-120B"
-        input_rate: 0.05       # [PUBLIC] verified 2026-05-11 — deepinfra.com/openai/gpt-oss-120b
-        output_rate: 0.45      # [PUBLIC] verified 2026-05-11 — deepinfra.com/openai/gpt-oss-120b
-        notes: "Asymmetric pricing. Output is 9x input rate."
+        input_rate: 0.039      # [PUBLIC_PRICING] deepinfra.com/openai/gpt-oss-120b — verified 2026-05-12
+        output_rate: 0.19      # [PUBLIC_PRICING] deepinfra.com/openai/gpt-oss-120b — verified 2026-05-12
+        notes: "Asymmetric pricing. Output is ~4.87x input rate."
 
   baseten:
     name: "Baseten"
@@ -132,9 +132,9 @@ dedicated_gpu:
     gpus:
       h100_sxm:
         name: "H100 SXM 80GB"
-        hourly_rate: 2.99      # [PUBLIC] verified 2026-05-11 (was $3.78, price dropped)
+        hourly_rate: 3.99      # [PUBLIC_PRICING] lambda.ai/pricing — verified 2026-05-12
         reserved_rate: 1.89    # [REPORTED] reserved/dedicated cluster pricing
-        notes: "Per GPU in 8-GPU config. On-demand $2.99, reserved $1.89-$2.59"
+        notes: "Per GPU in 8-GPU config. On-demand $3.99-$4.29 depending on instance size."
 
   runpod:
     name: "RunPod"
