@@ -1,0 +1,99 @@
+# Vendor Evaluation Scorecard
+# Seven-Gate framework from The Honest Field Guide to Production Inference
+# https://sohailmo.ai/inference-field-guide/#part-4-the-seven-gate-scorecard
+#
+# Score each gate: PASS / CONDITIONAL / FAIL
+# Final recommendation: PROCEED / EVALUATE / ELIMINATE
+#
+# A FAIL on any gate should eliminate the vendor for that workload
+# unless a clear compensating control exists.
+# Two or more CONDITIONAL scores warrant deeper evaluation.
+
+evaluation:
+  date: "YYYY-MM-DD"
+  evaluator: ""
+  workload_description: ""
+  vendor_name: ""
+
+gates:
+
+  gate_1_model_availability:
+    score: ""  # PASS | CONDITIONAL | FAIL
+    notes: ""
+    checks:
+      - model_available: false       # Is your target model served?
+      - precision_available: ""      # FP8, FP4, BF16 — what you need
+      - custom_weights_supported: false  # Can you deploy fine-tuned weights?
+      - lora_runtime_loading: false  # Runtime LoRA loading vs separate deployment?
+      - new_model_lag_days: null     # Days between model release and availability
+
+  gate_2_latency_under_load:
+    score: ""  # PASS | CONDITIONAL | FAIL
+    notes: ""
+    checks:
+      - benchmark_duration_days: null  # Minimum 7 days recommended
+      - p50_ttft_ms: null
+      - p95_ttft_ms: null
+      - p99_ttft_ms: null
+      - p50_inter_token_ms: null
+      - p95_inter_token_ms: null
+      - p99_inter_token_ms: null
+      - tested_at_production_concurrency: false
+
+  gate_3_throughput_economics:
+    score: ""  # PASS | CONDITIONAL | FAIL
+    notes: ""
+    checks:
+      - input_rate_per_m_tokens: null   # $/M input tokens
+      - output_rate_per_m_tokens: null  # $/M output tokens
+      - lcpr_calculated: null           # Use https://inference-field-guide.streamlit.app
+      - monthly_cost_at_volume: null
+      - compared_against_n_vendors: null
+
+  gate_4_reliability_failover:
+    score: ""  # PASS | CONDITIONAL | FAIL
+    notes: ""
+    checks:
+      - published_uptime_sla: ""       # e.g., "99.9%"
+      - actual_uptime_12mo: ""         # From status page history
+      - sla_remedy_type: ""            # Credit-based, contractual, etc.
+      - multi_region_available: false
+      - rate_limiting_behavior: ""     # Graceful degradation vs aggressive 429s
+
+  gate_5_compliance_data_handling:
+    score: ""  # PASS | CONDITIONAL | FAIL
+    notes: ""
+    checks:
+      - soc2_type2: false
+      - hipaa_baa: false
+      - default_data_retention: ""     # "none", "30 days", "stored unless disabled"
+      - zero_retention_available: false
+      - eu_data_residency: false
+      - fedramp_authorized: false
+      - written_confirmation_obtained: false
+
+  gate_6_integration_complexity:
+    score: ""  # PASS | CONDITIONAL | FAIL
+    notes: ""
+    checks:
+      - openai_compatible_api: false
+      - time_to_first_request_hours: null
+      - structured_output_support: ""  # "native", "json_mode", "none"
+      - streaming_support: true
+      - sdk_quality: ""                # "good", "adequate", "poor"
+      - documentation_quality: ""      # "good", "adequate", "poor"
+
+  gate_7_pricing_trajectory:
+    score: ""  # PASS | CONDITIONAL | FAIL
+    notes: ""
+    checks:
+      - price_changes_12mo: ""         # "increased", "decreased", "stable"
+      - structural_cost_advantages: "" # Custom kernels, spec decode, cache pooling
+      - margin_signals: ""             # Funding, profitability indicators
+      - hardware_generation: ""        # H100, B200, custom silicon
+
+recommendation:
+  overall: ""  # PROCEED | EVALUATE | ELIMINATE
+  summary: ""
+  compensating_controls: ""  # If any gate is CONDITIONAL, what mitigates the risk?
+  next_steps: []

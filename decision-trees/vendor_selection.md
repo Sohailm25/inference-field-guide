@@ -39,21 +39,21 @@ flowchart TD
     OPS -->|No ML infra team| MANAGED[Managed: Together, Fireworks,<br/>or Baseten dedicated]
     OPS -->|Have infra engineers| SELF[Neo-cloud + vLLM/SGLang<br/>Lambda, CoreWeave, RunPod]
 
-    style FED fill:#e8eaf6
-    style EU fill:#e8eaf6
-    style HEALTH fill:#e8f5e9
-    style FIN fill:#e8f5e9
-    style GROQ fill:#fff3e0
-    style FW_LAT fill:#fff3e0
-    style SPEC fill:#fff3e0
-    style DI fill:#e3f2fd
-    style CALC fill:#e3f2fd
-    style FW_LORA fill:#e3f2fd
-    style TOG fill:#f3e5f5
-    style BAS fill:#f3e5f5
-    style TOG_FT fill:#f3e5f5
-    style MANAGED fill:#fce4ec
-    style SELF fill:#fce4ec
+    style FED fill:#e8eaf6,color:#333
+    style EU fill:#e8eaf6,color:#333
+    style HEALTH fill:#e8f5e9,color:#333
+    style FIN fill:#e8f5e9,color:#333
+    style GROQ fill:#fff3e0,color:#333
+    style FW_LAT fill:#fff3e0,color:#333
+    style SPEC fill:#fff3e0,color:#333
+    style DI fill:#e3f2fd,color:#333
+    style CALC fill:#e3f2fd,color:#333
+    style FW_LORA fill:#e3f2fd,color:#333
+    style TOG fill:#f3e5f5,color:#333
+    style BAS fill:#f3e5f5,color:#333
+    style TOG_FT fill:#f3e5f5,color:#333
+    style MANAGED fill:#fce4ec,color:#333
+    style SELF fill:#fce4ec,color:#333
 ```
 
 ## Where Each Provider Wins

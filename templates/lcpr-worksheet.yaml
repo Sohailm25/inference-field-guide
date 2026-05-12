@@ -1,0 +1,97 @@
+# LCPR Worksheet
+# Loaded Cost Per Request calculation template
+# https://sohailmo.ai/inference-field-guide/#the-number-that-actually-matters
+#
+# LCPR = (token_cost + retry_cost + repair_cost + engineering_cost)
+#        / successful_requests
+#
+# Interactive calculator: https://inference-field-guide.streamlit.app
+
+workload:
+  name: ""
+  description: ""
+  date: "YYYY-MM-DD"
+
+  # Request shape
+  avg_input_tokens: 800
+  avg_output_tokens: 400
+  monthly_requests: 500000
+
+  # Reliability
+  retry_rate: 0.03           # 3% — fraction of requests that fail and retry
+  quality_gate_pass_rate: 0.95  # 95% — fraction passing output validation
+
+  # Repair
+  repair_cost_per_failure: 0.002  # $ cost to re-prompt a failed request
+
+  # Engineering overhead
+  engineering_hours_per_month: 8
+  engineer_hourly_cost: 100  # $/hour
+
+  # Caching (optional)
+  cache_hit_rate: 0.0        # 0.0–1.0 — fraction of input tokens served from cache
+
+providers:
+
+  # Add your providers below. Copy this block for each provider.
+
+  - name: "Provider A"
+    deployment_mode: "closed_api"  # closed_api | serverless_open | dedicated
+    input_rate_per_m: null   # $/M input tokens
+    output_rate_per_m: null  # $/M output tokens
+    # For dedicated GPU, fill these instead:
+    gpu_hourly_cost: null    # $/hr per GPU
+    gpu_count: null
+    utilization: null        # 0.0–1.0 realistic utilization
+
+  - name: "Provider B"
+    deployment_mode: "serverless_open"
+    input_rate_per_m: null
+    output_rate_per_m: null
+    gpu_hourly_cost: null
+    gpu_count: null
+    utilization: null
+
+  - name: "Provider C"
+    deployment_mode: "dedicated"
+    input_rate_per_m: null
+    output_rate_per_m: null
+    gpu_hourly_cost: null
+    gpu_count: null
+    utilization: null
+
+# Calculation (fill in after running the calculator or computing manually):
+#
+# For each provider:
+#
+#   total_attempts = monthly_requests × (1 + retry_rate)
+#   token_cost     = total_attempts × (avg_input_tokens × input_rate/1M
+#                                     + avg_output_tokens × output_rate/1M)
+#   retry_cost     = (implicit in total_attempts — each retry is a full request)
+#   repair_cost    = monthly_requests × (1 - quality_gate_pass_rate) × repair_cost_per_failure
+#   engineering_cost = engineering_hours_per_month × engineer_hourly_cost
+#   successful_requests = monthly_requests × quality_gate_pass_rate
+#
+#   LCPR = (token_cost + repair_cost + engineering_cost) / successful_requests
+
+results:
+
+  - provider: "Provider A"
+    lcpr: null
+    monthly_cost: null
+    overhead_ratio: null     # LCPR / raw_cost_per_request
+
+  - provider: "Provider B"
+    lcpr: null
+    monthly_cost: null
+    overhead_ratio: null
+
+  - provider: "Provider C"
+    lcpr: null
+    monthly_cost: null
+    overhead_ratio: null
+
+comparison:
+  cheapest_provider: ""
+  lcpr_ratio_highest_to_lowest: null
+  recommendation: ""

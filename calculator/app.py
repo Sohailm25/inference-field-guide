@@ -525,6 +525,29 @@ def main() -> None:
         "All numbers use May 2026 public pricing."
     )
 
+    with st.expander("What is LCPR?", expanded=False):
+        st.latex(
+            r"\text{LCPR} = \frac{\text{token\_cost} + \text{retry\_cost}"
+            r" + \text{repair\_cost} + \text{engineering\_cost}}"
+            r"{\text{successful\_requests}}"
+        )
+        st.markdown(
+            "**Loaded Cost Per Request** — the true cost of getting a "
+            "correct answer:\n"
+            "- **Token cost**: (input × rate + output × rate) × total "
+            "attempts\n"
+            "- **Retry cost**: implicit — every retry burns tokens\n"
+            "- **Repair cost**: quality/schema gate failures × re-prompt "
+            "cost\n"
+            "- **Engineering cost**: monthly stack maintenance hours × "
+            "rate\n"
+            "- **Successful requests**: total × quality gate pass rate\n\n"
+            "Full methodology: "
+            "[Part 0 of the essay]"
+            "(https://sohailmo.ai/inference-field-guide/"
+            "#part-0-the-cost-illusion)."
+        )
+
     calc = LCPRCalculator(PRICING_PATH)
     profile, profile_name = _build_profile_from_sidebar()
 
