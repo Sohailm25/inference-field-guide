@@ -1,0 +1,92 @@
+# Migration Readiness Assessment
+# Polynomial complexity scoring from The Honest Field Guide to Production Inference
+# Interactive version: https://inference-field-guide.streamlit.app (Migration Readiness tab)
+#
+# Instructions:
+#   1. Score each factor 1 (Low), 2 (Medium), or 3 (High)
+#   2. Sum all scores → total (6-18)
+#   3. Look up your tier: Simple (6-9) | Standard (10-14) | Complex (15-18)
+#   4. Review identified gaps and next steps
+
+assessment:
+  date: "YYYY-MM-DD"
+  assessor: ""
+  company: ""
+  current_provider: ""
+  monthly_inference_spend: null
+
+factors:
+  workload_count:
+    score: null  # 1 | 2 | 3
+    description: ""
+    # 1 (Low):    1-2 models, single use case
+    # 2 (Medium): 3-5 models, 2-3 use cases
+    # 3 (High):   6+ models, mixed latency/throughput requirements
+
+  prompt_portability:
+    score: null
+    description: ""
+    # 1 (Low):    Simple prompts, no structured output
+    # 2 (Medium): Moderate prompt engineering, JSON mode
+    # 3 (High):   Complex chains, tool use, function calling, custom schemas
+
+  quality_infrastructure:
+    score: null
+    description: ""
+    # 1 (Low):    No formal evaluation framework
+    # 2 (Medium): Basic eval suite (<50 test cases)
+    # 3 (High):   Comprehensive evals (500+ cases), regression testing, human-in-loop
+
+  latency_sensitivity:
+    score: null
+    description: ""
+    # 1 (Low):    Batch/async (>5s acceptable)
+    # 2 (Medium): Interactive (<2s P95 required)
+    # 3 (High):   Real-time (<500ms P95, voice, streaming)
+
+  team_maturity:
+    score: null
+    description: ""
+    # 1 (Low):    No ML infrastructure expertise
+    # 2 (Medium): 1-2 engineers with vLLM/serving experience
+    # 3 (High):   Dedicated inference team (3+ engineers)
+
+  integration_depth:
+    score: null
+    description: ""
+    # 1 (Low):    Single API call, stateless
+    # 2 (Medium): SDK integration, session state, caching logic
+    # 3 (High):   Multi-system (gateway, observability, billing, compliance)
+
+results:
+  total_score: null  # Sum of factor scores (6-18)
+  tier: ""           # Simple (6-9) | Standard (10-14) | Complex (15-18)
+  estimated_timeline_weeks: null
+  recommended_approach: ""
+  # Simple:   Self-service migration, serverless-first. 4-6 weeks, 1-2 engineers.
+  # Standard: Phased migration with quality gates. 8-12 weeks, 2-3 engineers.
+  # Complex:  Expert-assisted (Field Deployment Engineer model). 12-20 weeks, dedicated team.
+  identified_gaps: []
+  # Check these gap rules after scoring:
+  #   1. If quality_infrastructure = 1 → "No evaluation framework. Build a minimum
+  #      viable eval suite (20-50 representative inputs) before starting migration."
+  #   2. If team_maturity = 1 AND latency_sensitivity = 3 → "No inference expertise
+  #      for latency-critical workload. Sub-500ms P95 requires runtime optimization.
+  #      Options: hire inference engineer, or use managed dedicated with vendor optimization."
+  #   3. If integration_depth = 3 AND workload_count = 3 → "Multi-system migration
+  #      at scale. Phased approach mandatory. Migrate one workload at a time with
+  #      2-week parallel-run validation."
+  next_steps: []
+
+engineering_hours_reference:
+  # Source: [MODELED] from provider onboarding docs (serverless, managed)
+  #         [REPORTED] from community benchmarks (self-managed)
+  serverless:
+    setup_hours: "2-8 per workload"
+    monthly_hours: "2-5"
+  managed_dedicated:
+    setup_hours: "8-20"
+    monthly_hours: "5-10"
+  self_managed:
+    setup_hours: "40-80"
+    monthly_hours: "30-60"

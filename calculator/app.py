@@ -21,6 +21,12 @@ from calculator.lcpr import (
     compute_lcpr,
     load_provider_pricing,
 )
+from calculator.readiness import (
+    MigrationFactor,
+    compute_payback,
+    compute_readiness,
+    get_engineering_hours,
+)
 from calculator.workload_profiles import PROFILES, get_profile, list_profiles
 
 PRICING_PATH = Path(__file__).parent / "provider_pricing.yaml"
@@ -510,6 +516,254 @@ def _tab_decision_trees() -> None:
         _vendor_selection_widget()
 
 
+FACTOR_OPTIONS = {
+    "workload_count": {
+        "label": "How many model endpoints?",
+        "choices": [
+            "1-2 models, single use case",
+            "3-5 models, 2-3 use cases",
+            "6+ models, mixed requirements",
+        ],
+    },
+    "prompt_portability": {
+        "label": "Prompt complexity?",
+        "choices": [
+            "Simple prompts, no structured output",
+            "JSON mode, moderate engineering",
+            "Tool use, function calling, custom schemas",
+        ],
+    },
+    "quality_infrastructure": {
+        "label": "Evaluation infrastructure?",
+        "choices": [
+            "No formal evals",
+            "Basic suite (<50 test cases)",
+            "Comprehensive (500+ cases, regression, HITL)",
+        ],
+    },
+    "latency_sensitivity": {
+        "label": "Latency requirement?",
+        "choices": [
+            "Batch/async (>5s OK)",
+            "Interactive (<2s P95)",
+            "Real-time (<500ms P95, voice/streaming)",
+        ],
+    },
+    "team_maturity": {
+        "label": "Inference team maturity?",
+        "choices": [
+            "No ML infra expertise",
+            "1-2 engineers with serving experience",
+            "Dedicated inference team (3+)",
+        ],
+    },
+    "integration_depth": {
+        "label": "Integration complexity?",
+        "choices": [
+            "Single API call, stateless",
+            "SDK + session state + caching",
+            "Multi-system (gateway, observability, billing, compliance)",
+        ],
+    },
+}
+
+TIER_COLORS = {
+    "Simple": "#A7C080",
+    "Standard": "#D4A843",
+    "Complex": "#e74c3c",
+}
+
+
+def _tab_readiness(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
+    """Tab 5: Migration readiness assessment."""
+    st.subheader("Migration Readiness Assessment")
+    st.markdown(
+        "Score 6 factors to estimate migration complexity, timeline, "
+        "and engineering investment. Based on the polynomial complexity "
+        "model from Part 1 of the essay."
+    )
+
+    # Section 1: Complexity Assessment
+    st.markdown("#### Complexity Factors")
+    factors = []
+    for name, opts in FACTOR_OPTIONS.items():
+        choice = st.radio(
+            opts["label"],
+            opts["choices"],
+            key=f"readiness_{name}",
+            horizontal=True,
+        )
+        score = opts["choices"].index(choice) + 1
+        factors.append(MigrationFactor(name=name, score=score))
+
+    result = compute_readiness(factors)
+    color = TIER_COLORS[result.tier]
+
+    # Section 2: Score Output
+    st.markdown("---")
+    st.markdown("#### Assessment Result")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(
+            f'<div style="text-align:center; padding:16px; '
+            f'border:2px solid {color}; border-radius:8px;">'
+            f'<div style="font-size:2em; font-weight:bold; color:{color};">'
+            f'{result.total_score}/18</div>'
+            f'<div style="color:#ccc;">Complexity Score</div>'
+            f'<div style="color:{color}; font-weight:bold;">{result.tier}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    with col2:
+        st.metric(
+            "Estimated Timeline",
+            f"{result.timeline_weeks_min}-{result.timeline_weeks_max} weeks",
+        )
+    with col3:
+        team_size = {
+            "Simple": "1-2 engineers",
+            "Standard": "2-3 engineers",
+            "Complex": "Dedicated team or vendor partnership",
+        }
+        st.metric("Team Requirement", team_size[result.tier])
+
+    st.info(f"**Recommended approach:** {result.recommendation}")
+
+    # Section 3: Engineering Hours
+    st.markdown("---")
+    st.markdown("#### Engineering Investment by Deployment Mode")
+
+    eng_rate = profile.engineer_hourly_cost
+    rows = []
+    for mode, label in [
+        ("serverless", "Serverless Open-Weights"),
+        ("managed_dedicated", "Managed Dedicated"),
+        ("self_managed", "Self-Managed Dedicated"),
+    ]:
+        hours = get_engineering_hours(mode)
+        setup_cost_lo = hours["setup_min"] * eng_rate
+        setup_cost_hi = hours["setup_max"] * eng_rate
+        monthly_cost_lo = hours["monthly_min"] * eng_rate
+        monthly_cost_hi = hours["monthly_max"] * eng_rate
+        rows.append({
+            "Deployment Mode": label,
+            "Setup (hours)": f"{hours['setup_min']}-{hours['setup_max']}",
+            "Setup (cost)": f"${setup_cost_lo:,.0f}-${setup_cost_hi:,.0f}",
+            "Monthly (hours)": f"{hours['monthly_min']}-{hours['monthly_max']}",
+            "Monthly (cost)": f"${monthly_cost_lo:,.0f}-${monthly_cost_hi:,.0f}",
+        })
+
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.caption(
+        f"Cost estimates use ${eng_rate:.0f}/hr engineer rate from sidebar profile. "
+        "Setup hours: [MODELED] from provider onboarding documentation. "
+        "Self-managed ongoing: [REPORTED] from community benchmarks."
+    )
+
+    # Section 4: Cost Impact
+    st.markdown("---")
+    st.markdown("#### Cost Impact")
+    st.markdown(
+        "Enter your current monthly inference spend to see projected savings "
+        "and payback period. The target cost comes from the LCPR comparison "
+        "(Tab 1) using your sidebar workload profile."
+    )
+
+    results = calc.compare(profile)
+    if results:
+        current_monthly = st.number_input(
+            "Your current monthly inference spend ($)",
+            min_value=0,
+            max_value=10_000_000,
+            value=0,
+            step=1_000,
+            key="readiness_current_spend",
+        )
+
+        if current_monthly > 0:
+            # Suggest target based on tier
+            serverless = [
+                r for r in results if r.deployment_mode == "serverless_open"
+            ]
+            dedicated = [
+                r for r in results if r.deployment_mode == "dedicated"
+            ]
+
+            if result.tier == "Simple" and serverless:
+                target = serverless[0]
+                target_label = "Serverless open-weights"
+                target_mode = "serverless"
+            elif result.tier != "Simple" and dedicated:
+                target = dedicated[0]
+                target_label = "Managed dedicated"
+                target_mode = "managed_dedicated"
+            elif serverless:
+                target = serverless[0]
+                target_label = "Serverless open-weights"
+                target_mode = "serverless"
+            else:
+                target = results[0]
+                target_label = "Best available"
+                target_mode = "serverless"
+
+            target_hours = get_engineering_hours(target_mode)
+            setup_investment = (
+                (target_hours["setup_min"] + target_hours["setup_max"])
+                / 2 * eng_rate
+            )
+            monthly_eng_cost = (
+                (target_hours["monthly_min"] + target_hours["monthly_max"])
+                / 2 * eng_rate
+            )
+            # Total projected = inference cost + engineering overhead
+            projected_total = target.monthly_cost + monthly_eng_cost
+            net_monthly_savings = current_monthly - projected_total
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Current Spend", f"${current_monthly:,.0f}/mo")
+            with col2:
+                st.metric(
+                    f"{target_label} (total)",
+                    f"${projected_total:,.0f}/mo",
+                    delta=(
+                        f"-${net_monthly_savings:,.0f}/mo"
+                        if net_monthly_savings > 0 else
+                        f"+${-net_monthly_savings:,.0f}/mo"
+                    ),
+                    delta_color="normal" if net_monthly_savings > 0 else "inverse",
+                    help=(
+                        f"{target.provider_name}: "
+                        f"${target.monthly_cost:,.0f} inference + "
+                        f"${monthly_eng_cost:,.0f} engineering"
+                    ),
+                )
+            with col3:
+                payback = compute_payback(
+                    current_monthly, projected_total, setup_investment,
+                )
+                if payback == float("inf"):
+                    st.metric("Payback Period", "N/A",
+                              help="Migration does not save money at this spend level")
+                else:
+                    st.metric("Payback Period", f"{payback:.1f} months",
+                              help=f"One-time setup: ${setup_investment:,.0f}")
+        else:
+            st.info(
+                "Enter your current monthly spend above to see projected "
+                "savings. You can also compare providers directly in the "
+                "LCPR Comparison tab."
+            )
+
+    # Section 5: Readiness Gaps
+    if result.gaps:
+        st.markdown("---")
+        st.markdown("#### Readiness Gaps")
+        for gap in result.gaps:
+            st.warning(f"**{gap}**")
+
+
 def main() -> None:
     st.set_page_config(
         page_title="Inference Field Guide Calculator",
@@ -551,10 +805,11 @@ def main() -> None:
     calc = LCPRCalculator(PRICING_PATH)
     profile, profile_name = _build_profile_from_sidebar()
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "LCPR Comparison",
         "Sensitivity Analysis",
         "Break-Even Analysis",
+        "Migration Readiness",
         "Decision Trees",
     ])
 
@@ -565,6 +820,8 @@ def main() -> None:
     with tab3:
         _tab_breakeven(calc)
     with tab4:
+        _tab_readiness(calc, profile)
+    with tab5:
         _tab_decision_trees()
 
 
