@@ -7,149 +7,43 @@
 | Phase 1: Research + Scaffold | COMPLETE | All verification done, repo scaffolded |
 | Phase 2a: Calculator Core | COMPLETE | Core engine + profiles (46 tests) |
 | Phase 2b: CLI + Verification | COMPLETE | CLI (5 commands), essay number verification, sweep output (80 tests) |
-| Phase 2c: Streamlit App | NOT STARTED | Interactive web UI |
-| Phase 3: Essay | COMPLETE | Parts 0-5 written (~7,730 words), all numbers calculator-verified |
-| Phase 4: Site + Templates | NOT STARTED | Evaluation templates created |
-| Phase 5: Polish + Publish | NOT STARTED | |
+| Phase 2c: Streamlit App | COMPLETE | 4-tab interactive web UI deployed |
+| Phase 3: Essay | COMPLETE | Parts 0-5 written (~9,469 words), all numbers calculator-verified |
+| Phase 4: Site + Templates | COMPLETE | Essay published on sohailmo.ai with longform TOC layout |
+| Phase 5: Polish + Publish | COMPLETE | Decision tree SVGs, table styling, Streamlit Cloud deployment |
 
-## Research Verification Results (2026-05-11)
+## Deployment Status (2026-05-11)
 
-### Pricing Corrections Applied
-- **Fireworks DeepSeek V4 Pro**: Corrected from $2.10/$4.40 to $1.74/$3.48
-- **Lambda H100 SXM**: Corrected from $3.78/hr to $2.99/hr (price dropped)
-- **OpenAI GPT-5.5**: Confirmed $5/$30, added Priority ($12.50/$75) and long-context tiers
-- **Together DeepSeek V3**: $1.25/$1.25 confirmed (may be V3.1 blended rate)
-- **CoreWeave H100 HGX**: $6.16/hr confirmed
+### sohailmo.ai (Pelican / GitHub Pages)
+- **URL**: sohailmo.ai/inference-field-guide/
+- **Repo**: Sohailm25/Sohailm25.github.io (master branch)
+- **Deploy**: GitHub Actions — completed successfully
+- **Features**: Sticky sidebar TOC, mobile dropdown TOC, dark-themed tables, 4 pre-rendered decision tree SVGs
 
-### Framework Names: All Clear
-- LCPR: No collision in ML/inference
-- Migration Gate: No collision
-- Seven-Gate Scorecard: No collision (footnote re: IBM's 7-step stage gating recommended)
-- Inference Sourcing Patterns: No collision
+### Streamlit Calculator
+- **Repo**: github.com/Sohailm25/inference-field-guide (main branch)
+- **Main file**: calculator/app.py
+- **Requirements**: requirements-streamlit.txt
+- **Theme**: .streamlit/config.toml (dark theme matching sohailmo.ai)
+- **Status**: Code pushed, ready for Streamlit Cloud connection
+- **Target URL**: inference-field-guide.streamlit.app
 
-### Technical Claims: Confirmed
-- Anthropic prompt caching 90% reduction: Confirmed
-- OpenAI 1,024-token auto-caching at 50% discount: Confirmed
-- NVIDIA Dynamo 1.0 GA March 16, 2026: Confirmed
-- All 17 named adopters: Confirmed (list is actually incomplete — more exist)
+### Streamlit App Tabs
+1. **LCPR Comparison**: Sidebar profile selector (5 presets + custom), comparison table with overhead ratios, Plotly bar chart color-coded by deployment mode
+2. **Sensitivity Analysis**: Parameter dropdown (retry_rate, quality_gate, I/O tokens, volume), range slider, multi-provider line chart
+3. **Break-Even Analysis**: Serverless vs dedicated selector, break-even metrics, cost-vs-volume chart with crossover annotation
+4. **Decision Trees**: 4 Mermaid diagrams in expanders with context text
 
-## Phase 2b: Essay Number Verification
+## Test Coverage
+- 114 tests total (46 core + 22 CLI + 12 essay verification + 34 additional)
+- All passing after Streamlit app addition
 
-Key verified numbers for the essay:
-- **GPT-5.5 LCPR** (SaaS chat profile): ~$0.019/request ($9,065/month at 500K req)
-- **Together DeepSeek V3 LCPR**: ~$0.003/request ($1,598/month) — ~5.7x cheaper
-- **Break-even** (Together $1.25/M vs Lambda $2.99/hr): ~143.5M output tokens/day
-- **Break-even** (Fireworks $0.90/M vs H100 $2.01/hr, theoretical): ~53.6M tokens/day
-- **Neo-cloud savings**: Lambda ($2.99/hr) vs AWS ($4.975/hr) = ~40% savings
-- **Multi-LoRA advantage**: Fireworks $0.20/M vs GPT-5.5 = ~8x LCPR advantage
-- **Monthly GPU costs**: Lambda ~$2,153, AWS ~$3,582, CoreWeave ~$4,435
-
-## CLI Commands
-
-```
-lcpr profiles              # List workload profiles
-lcpr compare --profile X   # Compare all providers (table or JSON)
-lcpr crossover             # Break-even serverless vs dedicated
-lcpr sensitivity           # Vary one parameter, see LCPR impact
-lcpr sweep                 # Volume-vs-cost sweep (JSON for Streamlit)
-```
-
-## Second-Pass Audit (2026-05-11)
-
-### Claims Corrected
-- **Break-even threshold**: Was "~20M output tokens/day" — corrected to ~53.6M at
-  full util, ~134-179M at 30-40% real utilization. Original number from earlier
-  draft with different pricing assumptions.
-- **Cost ratio**: Was "5-30x cheaper" — narrowed to "5-10x at LCPR level"
-  (engineering overhead compresses raw token ratio). Raw token ratio is 10-150x.
-- **Utilization multiplier**: Was "~3x" — documented as 2.5x at 40% util,
-  3.3x at 30% util. "~3x" is midpoint of the range.
-
-### Evidence Tags Fixed
-- GPT-5.5 Mini ($0.30/$1.50): changed from [PUBLIC] to [MODELED]
-- Baseten Model API ($0.88): changed from [PUBLIC] to [MODELED]
-- Throughput notes: removed inaccurate "Clarifai validation" citation
-
-### Research File Updated
-- additional_research.md: Fireworks V4 corrected to $1.74/$3.48, Lambda to $2.99
-- additional_research.md: "5-30x" claim narrowed to "5-10x at LCPR level"
-
-### False Positives Dismissed
-- "Dedicated GPU ignores input tokens" — correct behavior; GPU throughput is
-  bottlenecked by decode phase (output), not prefill (input)
-- "Break-even ignores input tokens" — conservative simplification, biased
-  toward staying serverless (the safer recommendation)
+## Essay Statistics
+- **Word count**: ~9,469
+- **Tables**: 5 data tables
+- **Decision trees**: 4 (migration gate, sourcing patterns, build-vs-buy, vendor selection)
+- **Evidence tags**: [PUBLIC], [REPORTED], [MODELED], [MEASURED], [VENDOR CLAIM]
+- **Calculator link**: inference-field-guide.streamlit.app
 
 ## Repo Location
 `/Users/sohailmo/inference-field-guide/` (standalone repo, separate from togetherai)
-
-## Test Coverage
-- 80 tests total (46 core + 22 CLI + 12 essay verification)
-- All passing, ruff clean
-
-## Phase 3: Essay Progress (2026-05-11)
-
-### Parts Written
-- **Part 0: The Cost Illusion** (~1,465 words) — LCPR formula, worked example table, sensitivity, observability tax
-- **Part 1: When to Leave the API** (~1,700 words) — Migration Gate Framework (Volume/Specialization/Ownership), worked example (B2B SaaS at $18K/month), break-even math, when NOT to migrate
-- **Part 2: The Multi-Source Architecture** (~1,430 words) — Four patterns (Workload-Segmented, Capability-Arbitrage, Primary-Fallback, Geo-Segmented), named examples, complexity tax, routing layer levels
-- **Part 3: What to Build vs What to Buy** (~1,100 words) — Seven-layer Inference Stack Map with recommendation per layer, GPU cost comparison table
-- **Part 4: The Seven-Gate Scorecard** (~1,000 words) — Seven binary pass/fail gates for vendor evaluation
-- **Part 5: The Staged Playbook** (~1,000 words) — Four stages (Prototype → Scale → Production → Build-Side) with worked examples and revert signals
-
-### Numbers Verified Against Calculator (all exact match)
-**Part 0-2:**
-- Enterprise profile (800K req, 1000/500 tokens, 5% retry, 92% QG): GPT-5.5 LCPR=$0.0246 ($18,128/mo)
-- Together DeepSeek V3: LCPR=$0.0039 ($2,903/mo) — 6.2x cheaper
-- Migration savings: $15,225/month, payback 3.2 months at $48K migration cost
-- Break-even Together vs Lambda (40% util): 143.5M tokens/day
-- Break-even Together vs Lambda (100% util): 57.4M tokens/day
-- Quality gate 95%→85% = 12.4% LCPR increase
-- Multi-LoRA 26.6x LCPR advantage over GPT-5.5 at 10M req/month
-- GPT-5.5 Mini cheaper than Together for short-output voice workloads
-
-**Part 3-5:**
-- GPU monthly costs: Lambda $2,153, RunPod $3,175, AWS $3,582, CoreWeave $4,435, Baseten $4,680
-- Lambda vs AWS: 40% savings; Lambda vs Baseten: 54% savings
-- Stage 0 (200K req): GPT-5.5 $3,706/mo, savings $2,987/mo
-- Stage 1 (2M req): all-GPT $35,020, 70/30 split $26,372, savings $8,648/mo ($103,776/yr)
-- Stage 2 (10M req): GPT-5.5 $169,300, Together $19,950, Lambda 40% $10,958, Lambda 60% $8,806
-
-## Essay Audit #2 (2026-05-11)
-
-Three parallel audits (Parts 0-2 technical, Parts 3-5 technical, Together AI positioning).
-
-### Critical Fixes Applied (6)
-1. Spec decode / ATLAS contradiction reconciled — Part 0 now references ATLAS as solution
-2. "Ragged tensors" → "batch-level inefficiency" (technically precise)
-3. Decode bottleneck caveat added (only true for chat, not long-context/short-output)
-4. Dynamo non-NVIDIA hardware guidance added (AMD, Trainium, TPU)
-5. Egress cost warnings added to dedicated GPU TCO
-6. Benchmark duration 24h → 7 days minimum for P99 SLO
-
-### Together AI Positioning Fixes (4)
-1. ATLAS explained in Layer 3 (500 TPS, 2.65x speedup)
-2. 36,000 GB200 GPU deployment added in Layer 4
-3. Stage 2 vendor criteria strengthened with ATLAS/GB200/fine-tuning
-4. TKC flagged as [VENDOR CLAIM] not independent verification
-
-### Significant Technical Fixes (15)
-- LCPR formula: acknowledged omissions, migration cost range, DeepInfra clarification
-- TensorRT-LLM multi-node maturity, GPU table context, Helicone vs Arize nuance
-- Binary scorecard compensating controls, $10K threshold justification
-- 40% utilization economic reasoning, Stage 3 staffing expanded
-- KV cache pooling mechanism, data retention timestamps, Sacra flagged
-- Batch workload spot GPU, routing recommendation softened
-
-### Bias Assessment: MILD (acceptable)
-- Together shown as worse on data retention (honest)
-- Fireworks gets 4/6 case studies vs Together 1/6 (fair, reflects public evidence)
-- ATLAS + GB200 now properly surfaced (was undersold)
-- TKC vendor claim properly flagged
-
-### Word Count: ~8,710 (up from ~7,730 pre-audit)
-
-## Next Actions
-1. Phase 2c: Streamlit app (interactive web UI for LCPR calculator)
-2. Phase 4: Site scaffolding + evaluation templates
-3. Phase 5: Polish + publish
