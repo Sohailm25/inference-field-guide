@@ -415,67 +415,36 @@ def _tab_decision_trees() -> None:
         "Use these to navigate the key decisions in your inference architecture."
     )
 
-    trees = {
-        "Migration Gate Framework": {
-            "description": (
-                "Three gates to determine whether to migrate from closed APIs "
-                "to open-model inference: Volume (>$10K/mo spend), "
-                "Specialization (fine-tuning, latency SLOs, custom arch), "
-                "and Ownership (compliance, data residency, vendor risk)."
-            ),
-            "mermaid": _load_mermaid("migration_gate"),
-        },
-        "Inference Sourcing Patterns": {
-            "description": (
-                "Four multi-source patterns: Workload-Segmented (different providers "
-                "per workload), Capability-Arbitrage (best provider per capability), "
-                "Primary-Fallback (same model, multiple providers), and "
-                "Geo-Segmented (provider per region/regulation)."
-            ),
-            "mermaid": _load_mermaid("sourcing_patterns"),
-        },
-        "Build vs Buy Spectrum": {
-            "description": (
-                "The inference stack has 7 layers. Each is an independent "
-                "build-vs-buy decision. Most layers: buy. Routing Intelligence: hold."
-            ),
-            "mermaid": _load_mermaid("build_buy_spectrum"),
-        },
-        "Vendor Selection": {
-            "description": (
-                "Which provider fits your workload? Start with your primary "
-                "constraint: compliance, latency, cost, model flexibility, "
-                "or operational simplicity."
-            ),
-            "mermaid": _load_mermaid("vendor_selection"),
-        },
-    }
+    trees = [
+        ("Migration Gate Framework", "migration_gate",
+         "Three gates to determine whether to migrate from closed APIs "
+         "to open-model inference: Volume (>$10K/mo spend), "
+         "Specialization (fine-tuning, latency SLOs, custom arch), "
+         "and Ownership (compliance, data residency, vendor risk)."),
+        ("Inference Sourcing Patterns", "sourcing_patterns",
+         "Four multi-source patterns: Workload-Segmented (different providers "
+         "per workload), Capability-Arbitrage (best provider per capability), "
+         "Primary-Fallback (same model, multiple providers), and "
+         "Geo-Segmented (provider per region/regulation)."),
+        ("Build vs Buy Spectrum", "build_buy_spectrum",
+         "The inference stack has 7 layers. Each is an independent "
+         "build-vs-buy decision. Most layers: buy. Routing Intelligence: hold."),
+        ("Vendor Selection", "vendor_selection",
+         "Which provider fits your workload? Start with your primary "
+         "constraint: compliance, latency, cost, model flexibility, "
+         "or operational simplicity."),
+    ]
 
-    for name, data in trees.items():
-        with st.expander(name, expanded=False):
-            st.markdown(data["description"])
-            st.markdown(f"```mermaid\n{data['mermaid']}\n```")
+    svg_dir = Path(__file__).parent.parent / "decision-trees" / "svg"
 
-
-def _load_mermaid(name: str) -> str:
-    """Load Mermaid diagram from decision-trees directory."""
-    dt_path = Path(__file__).parent.parent / "decision-trees" / f"{name}.md"
-    if not dt_path.exists():
-        return "graph LR\n  A[Diagram not found]"
-
-    content = dt_path.read_text()
-    # Extract mermaid block
-    in_block = False
-    lines = []
-    for line in content.splitlines():
-        if line.strip() == "```mermaid":
-            in_block = True
-            continue
-        if line.strip() == "```" and in_block:
-            break
-        if in_block:
-            lines.append(line)
-    return "\n".join(lines)
+    for title, slug, description in trees:
+        with st.expander(title, expanded=False):
+            st.markdown(description)
+            svg_path = svg_dir / f"{slug}.svg"
+            if svg_path.exists():
+                st.image(str(svg_path), use_container_width=True)
+            else:
+                st.warning(f"Diagram not found: {svg_path}")
 
 
 def main() -> None:
