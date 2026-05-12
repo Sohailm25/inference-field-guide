@@ -407,13 +407,74 @@ def _tab_breakeven(calc: LCPRCalculator) -> None:
         )
 
 
+VENDOR_RECOMMENDATIONS = {
+    "Compliance / Regulation": [
+        ("US Federal / FedRAMP", "AWS Bedrock Gov or Azure Gov", "Only viable options"),
+        ("EU data residency", "Nebius Finland/France, Scaleway, Mistral", ""),
+        ("Healthcare / HIPAA", "Baseten (zero-retention default), Fireworks or Together with BAA", ""),
+        ("Finance + audit", "Baseten Writer reference or hyperscaler", ""),
+    ],
+    "Latency": [
+        ("Raw decode speed", "Groq / Cerebras", "Custom silicon"),
+        ("p95 TTFT <200ms", "Fireworks", "FireAttention + speculation"),
+        ("Agentic multi-hop <500ms", "Together ATLAS or Fireworks FireOptimizer", ""),
+    ],
+    "Cost": [
+        ("Minimize per-token", "DeepInfra", "10-30% below Fireworks/Together"),
+        ("Minimize LCPR", "Run the LCPR calculator (Tab 1) with your actual workload", ""),
+        ("Need Multi-LoRA", "Fireworks Multi-LoRA", "$0.20/M for 8B base"),
+    ],
+    "Model flexibility": [
+        ("Broad model catalog", "Together AI", "Widest serverless catalog"),
+        ("Custom Docker / TRT-LLM", "Baseten Truss", "Full runtime control"),
+        ("Fine-tune + serve", "Together or Fireworks", "Customer owns weights"),
+    ],
+    "Operational simplicity": [
+        ("No ML infra team", "Managed: Baseten, Fireworks, or Together dedicated", ""),
+        ("Have infra engineers", "Neo-cloud + vLLM/SGLang (Lambda, CoreWeave, RunPod)", ""),
+    ],
+}
+
+CONSTRAINT_COLORS = {
+    "Compliance / Regulation": "#e8eaf6",
+    "Latency": "#fff3e0",
+    "Cost": "#e3f2fd",
+    "Model flexibility": "#f3e5f5",
+    "Operational simplicity": "#fce4ec",
+}
+
+
+def _vendor_selection_widget() -> None:
+    """Interactive vendor selection based on primary constraint."""
+    constraint = st.radio(
+        "What's your primary constraint?",
+        list(VENDOR_RECOMMENDATIONS.keys()),
+        horizontal=True,
+    )
+
+    recommendations = VENDOR_RECOMMENDATIONS[constraint]
+    bg = CONSTRAINT_COLORS[constraint]
+
+    for sub_need, providers, note in recommendations:
+        note_text = f" — *{note}*" if note else ""
+        st.markdown(
+            f'<div style="background:{bg}; color:#333; padding:12px 16px; '
+            f'border-radius:8px; margin-bottom:8px;">'
+            f"<strong>{sub_need}</strong><br/>"
+            f"{providers}{note_text}</div>",
+            unsafe_allow_html=True,
+        )
+
+
 def _tab_decision_trees() -> None:
     """Tab 4: Decision tree diagrams."""
     st.subheader("Decision Frameworks")
     st.markdown(
-        "Interactive decision trees from the essay. "
-        "Use these to navigate the key decisions in your inference architecture."
+        "Decision trees from the essay. Click any heading below to expand. "
+        "Use the **expand icon** (top-right of each diagram) to view full-size."
     )
+
+    svg_dir = Path(__file__).parent.parent / "decision-trees" / "svg"
 
     trees = [
         ("Migration Gate Framework", "migration_gate",
@@ -429,13 +490,7 @@ def _tab_decision_trees() -> None:
         ("Build vs Buy Spectrum", "build_buy_spectrum",
          "The inference stack has 7 layers. Each is an independent "
          "build-vs-buy decision. Most layers: buy. Routing Intelligence: hold."),
-        ("Vendor Selection", "vendor_selection",
-         "Which provider fits your workload? Start with your primary "
-         "constraint: compliance, latency, cost, model flexibility, "
-         "or operational simplicity."),
     ]
-
-    svg_dir = Path(__file__).parent.parent / "decision-trees" / "svg"
 
     for title, slug, description in trees:
         with st.expander(title, expanded=False):
@@ -445,6 +500,14 @@ def _tab_decision_trees() -> None:
                 st.image(str(svg_path), use_container_width=True)
             else:
                 st.warning(f"Diagram not found: {svg_path}")
+
+    # Vendor Selection — interactive widget instead of static SVG
+    with st.expander("Vendor Selection", expanded=False):
+        st.markdown(
+            "Which provider fits your workload? "
+            "Select your primary constraint to see recommendations."
+        )
+        _vendor_selection_widget()
 
 
 def main() -> None:

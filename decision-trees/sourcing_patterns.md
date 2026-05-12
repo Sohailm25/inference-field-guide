@@ -30,10 +30,14 @@ flowchart TD
 
     GS --> EXAMPLES_GS["Examples:<br/>EU: Nebius (Finland/France), Scaleway<br/>US Federal: AWS Bedrock Gov / Azure Gov<br/>Healthcare: Baseten (Abridge, OpenEvidence)"]
 
-    style WS fill:#e3f2fd
-    style CA fill:#f3e5f5
-    style PF fill:#e8f5e9
-    style GS fill:#fff3e0
+    style WS fill:#e3f2fd,color:#333
+    style CA fill:#f3e5f5,color:#333
+    style PF fill:#e8f5e9,color:#333
+    style GS fill:#fff3e0,color:#333
+    style EXAMPLES_WS fill:#e3f2fd,color:#333
+    style EXAMPLES_CA fill:#f3e5f5,color:#333
+    style EXAMPLES_PF fill:#e8f5e9,color:#333
+    style EXAMPLES_GS fill:#fff3e0,color:#333
 ```
 
 ## Pattern Details

@@ -30,10 +30,11 @@ flowchart TD
     G3 -->|No| MANAGED[Use managed dedicated<br/>Baseten / Fireworks / Together]
     G3 -->|Yes| DEDICATED[Self-managed dedicated<br/>Neo-cloud + vLLM/SGLang]
 
-    style STAY_API fill:#e8f5e9
-    style SERVERLESS fill:#e3f2fd
-    style MANAGED fill:#fff3e0
-    style DEDICATED fill:#fce4ec
+    style STAY_API fill:#e8f5e9,color:#333
+    style SERVERLESS fill:#e3f2fd,color:#333
+    style SERVERLESS_DEDICATED fill:#e3f2fd,color:#333
+    style MANAGED fill:#fff3e0,color:#333
+    style DEDICATED fill:#fce4ec,color:#333
 ```
 
 ## Gate Details

@@ -22,13 +22,13 @@ flowchart LR
     L6 --> V6["BUY: Helicone, Arize,<br/>Grafana (watch Datadog costs)"]
     L7 --> V7["HOLD: Not mature enough<br/>Martian, RouteLLM, Not Diamond"]
 
-    style V1 fill:#e8f5e9
-    style V2 fill:#e8f5e9
-    style V3 fill:#e8f5e9
-    style V4 fill:#e8f5e9
-    style V5 fill:#e8f5e9
-    style V6 fill:#fff3e0
-    style V7 fill:#fce4ec
+    style V1 fill:#e8f5e9,color:#333
+    style V2 fill:#e8f5e9,color:#333
+    style V3 fill:#e8f5e9,color:#333
+    style V4 fill:#e8f5e9,color:#333
+    style V5 fill:#e8f5e9,color:#333
+    style V6 fill:#fff3e0,color:#333
+    style V7 fill:#fce4ec,color:#333
 ```
 
 ## Layer Verdicts
