@@ -1,0 +1,24 @@
+{
+  "example": "Support Answer Trace-to-Margin",
+  "views": [
+    "LCPR-2026",
+    "Trace-to-Margin Review v1",
+    "Cache Policy Gate v1"
+  ],
+  "trace_to_margin": {
+    "trace_cost": 14200.0,
+    "invoice_amount": 14850.0,
+    "delta": 650.0,
+    "eval_cost": 800.0,
+    "human_cost": 1000.0,
+    "ops_cost": 2500.0,
+    "total_loaded_cost": 19150.0,
+    "accepted_units": 82000,
+    "lcpr": 0.23353658536585367,
+    "revenue": 44999.96000000001,
+    "gross_margin": 25849.960000000006,
+    "gross_margin_pct": 0.5744440661725033,
+    "naive_cost_per_unit": 0.142,
+    "lcpr_to_naive_ratio": 1.6446238406046034
+  }
+}

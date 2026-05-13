@@ -1,0 +1,346 @@
+# ABOUTME: Machine-readable provider pricing snapshot for Production Inference Economics.
+# ABOUTME: Each row is one provider surface with billing units, accessed date, and volatility.
+#
+# Schema: see draft-assets/05-source-snapshot-recent-data.md for full field definitions.
+# All prices are USD per million tokens unless noted otherwise.
+# Every row must be refreshed within 7 days of publication.
+# Do NOT use these rows in durable body prose. Use them in calculator seeds,
+# appendix tables, and dated example footnotes.
+
+snapshot_date: "2026-05-12"
+schema_version: "1.1"  # bumped: updated to current models across the board
+
+providers:
+
+  # --- OpenAI ---
+
+  - snapshot_id: openai-gpt5.4-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://developers.openai.com/api/docs/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example:
+      - support-answer.trace-margin.v1
+    body_claim_allowed: false
+    provider: OpenAI
+    platform: first_party_api
+    deployment_mode: online
+    region: global
+    model_id: gpt-5.4
+    model_family: GPT-5.4
+    modality: text
+    billing_unit: per_million_tokens
+    input_per_mtok: 2.50
+    output_per_mtok: 15.00
+    cached_input_per_mtok: 0.25
+    cache_write_per_mtok: null  # OpenAI automatic caching; no separate write charge
+    cache_read_per_mtok: 0.25  # same as cached_input_per_mtok
+    batch_multiplier: 0.5
+    notes: >
+      Verified from developers.openai.com/api/docs/pricing 2026-05-12. GPT-5.4 is
+      OpenAI's current recommended flagship (replaced GPT-4.1). Cached input at 90%
+      discount (pay 10%). Batch 50% discount. Regional data residency adds 10% uplift.
+      Input price doubles to $5.00 for prompts >272K tokens.
+
+  - snapshot_id: openai-gpt5.4-mini-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://developers.openai.com/api/docs/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example:
+      - support-answer.trace-margin.v1
+      - support-rag-answer-drafting.audit.v1
+    body_claim_allowed: false
+    provider: OpenAI
+    platform: first_party_api
+    deployment_mode: online
+    region: global
+    model_id: gpt-5.4-mini
+    model_family: GPT-5.4
+    modality: text
+    billing_unit: per_million_tokens
+    input_per_mtok: 0.75
+    output_per_mtok: 4.50
+    cached_input_per_mtok: 0.075
+    batch_multiplier: 0.5
+    notes: >
+      Verified from developers.openai.com/api/docs/pricing 2026-05-12. Mini model in
+      GPT-5.4 family. Cached at 90% discount. Batch 50%.
+
+  - snapshot_id: openai-gpt5.4-nano-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://developers.openai.com/api/docs/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example:
+      - support-rag-answer-drafting.audit.v1
+    body_claim_allowed: false
+    provider: OpenAI
+    platform: first_party_api
+    deployment_mode: online
+    region: global
+    model_id: gpt-5.4-nano
+    model_family: GPT-5.4
+    modality: text
+    billing_unit: per_million_tokens
+    input_per_mtok: 0.20
+    output_per_mtok: 1.25
+    cached_input_per_mtok: 0.02
+    batch_multiplier: 0.5
+    notes: >
+      Verified from developers.openai.com/api/docs/pricing 2026-05-12. Nano model in
+      GPT-5.4 family. Cached at 90% discount. Batch 50%.
+
+  # --- Anthropic ---
+
+  - snapshot_id: anthropic-sonnet4.6-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example:
+      - coding-agent.lifecycle.v1
+      - support-answer.trace-margin.v1
+    body_claim_allowed: false
+    provider: Anthropic
+    platform: first_party_api
+    deployment_mode: online
+    region: global
+    model_id: claude-sonnet-4-6
+    model_family: Claude 4
+    modality: text
+    billing_unit: per_million_tokens
+    input_per_mtok: 3.00
+    output_per_mtok: 15.00
+    cached_input_per_mtok: 0.30
+    cache_write_5m_per_mtok: 3.75
+    cache_write_1h_per_mtok: 6.00
+    cache_read_per_mtok: 0.30
+    batch_multiplier: 0.5
+    notes: >
+      Verified from official Anthropic pricing page 2026-05-12. Cache write 1.25x (5m)
+      or 2x (1h) base input. Cache read 0.1x base input. Batch 50%. Data residency
+      (inference_geo: "us") adds 1.1x multiplier. Full 1M context at standard pricing.
+
+  - snapshot_id: anthropic-haiku4.5-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example:
+      - support-answer.trace-margin.v1
+    body_claim_allowed: false
+    provider: Anthropic
+    platform: first_party_api
+    deployment_mode: online
+    region: global
+    model_id: claude-haiku-4-5
+    model_family: Claude 4
+    modality: text
+    billing_unit: per_million_tokens
+    input_per_mtok: 1.00
+    output_per_mtok: 5.00
+    cached_input_per_mtok: 0.10
+    cache_write_5m_per_mtok: 1.25
+    cache_write_1h_per_mtok: 2.00
+    cache_read_per_mtok: 0.10
+    batch_multiplier: 0.5
+    notes: >
+      Verified from official Anthropic pricing page 2026-05-12. Haiku 4.5 replaces
+      Haiku 3.5 ($0.80/$4.00) as the current small model. Same cache multiplier
+      structure: write 1.25x (5m) / 2x (1h), read 0.1x. Batch 50%.
+
+  # --- Google Gemini ---
+
+  - snapshot_id: google-gemini2.5pro-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://ai.google.dev/gemini-api/docs/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example:
+      - coding-agent.lifecycle.v1
+    body_claim_allowed: false
+    provider: Google
+    platform: first_party_api
+    deployment_mode: online
+    region: global
+    model_id: gemini-2.5-pro
+    model_family: Gemini 2.5
+    modality: text
+    billing_unit: per_million_tokens
+    input_per_mtok: 1.25
+    input_per_mtok_over_200k: 2.50
+    output_per_mtok: 10.00
+    output_per_mtok_over_200k: 15.00
+    cached_input_per_mtok: 0.125
+    cached_input_per_mtok_over_200k: 0.25
+    cache_storage_per_mtok_hour: 4.50
+    batch_multiplier: 0.5
+    notes: >
+      Verified from official Google AI pricing page 2026-05-12. Gemini 2.5 Pro is
+      the latest GA model. Gemini 3.1 Pro Preview exists at $2.00/$12.00 but is
+      preview-only — not used in examples. Tiered pricing: 2x rate for prompts >200K.
+      Context caching uses storage rent model ($4.50/MTok/hr). Cached input at 10% of
+      standard. Batch/Flex at 50%. Free tier exists with rate limits — not captured.
+
+  # --- Together AI ---
+
+  - snapshot_id: together-llama4maverick-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://www.together.ai/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example:
+      - support-rag-answer-drafting.audit.v1
+    body_claim_allowed: false
+    provider: Together AI
+    platform: serverless_open_model
+    deployment_mode: online
+    region: global
+    model_id: "Llama-4-Maverick"
+    model_family: Llama 4
+    modality: text
+    billing_unit: per_million_tokens
+    input_per_mtok: 0.27
+    output_per_mtok: 0.85
+    cached_input_per_mtok: null  # not publicly documented per-token cache pricing
+    notes: >
+      Verified from together.ai/pricing 2026-05-12. Llama 4 Maverick replaces
+      Llama 3.3 70B ($0.88/$0.88) as representative open model. Other notable:
+      DeepSeek V4 Pro at $2.10/$4.40, Qwen 3 235B at $0.20/$0.60. Together also
+      offers 68 free models. Cached-input pricing not publicly documented per-token.
+
+  - snapshot_id: together-dedicated-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://www.together.ai/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example:
+      - support-rag-answer-drafting.audit.v1
+    body_claim_allowed: false
+    provider: Together AI
+    platform: dedicated_endpoint
+    deployment_mode: online
+    region: global
+    model_id: null  # customer chooses model
+    billing_unit: per_gpu_hour
+    gpu_hour_rate_h100: 3.99
+    gpu_hour_rate_h200: 5.49
+    gpu_hour_rate_b200: 9.95
+    minimum_billable_window: null  # not publicly documented
+    notes: >
+      Verified from together.ai/pricing 2026-05-12. Dedicated endpoints billed per
+      GPU-hour while active. Single-tenant GPU instances. H100 80GB at $3.99/hr,
+      H200 141GB at $5.49/hr, B200 180GB at $9.95/hr. No per-token charge on
+      dedicated; cost is fixed per GPU-hour regardless of throughput.
+
+  # --- Fireworks ---
+
+  - snapshot_id: fireworks-llama4maverick-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://fireworks.ai/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example:
+      - support-rag-answer-drafting.audit.v1
+    body_claim_allowed: false
+    provider: Fireworks AI
+    platform: serverless_open_model
+    deployment_mode: online
+    region: global
+    model_id: "Llama-4-Maverick"
+    model_family: Llama 4
+    modality: text
+    billing_unit: per_million_tokens
+    input_per_mtok: 0.15
+    output_per_mtok: 0.60
+    cached_input_per_mtok: 0.075
+    batch_multiplier: 0.5
+    notes: >
+      Verified from fireworks.ai/pricing and pricepertoken.com 2026-05-12. Llama 4
+      Maverick replaces DeepSeek V3 as representative open model. Cached input at
+      50% discount. Batch at 50%. Priority tier available at ~1.5x standard.
+      Same model (Llama 4 Maverick) across Together/Fireworks/Groq enables
+      apples-to-apples cross-provider comparison in examples.
+
+  # --- Groq ---
+
+  - snapshot_id: groq-llama4maverick-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://groq.com/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example: []
+    body_claim_allowed: false
+    provider: Groq
+    platform: serverless_open_model
+    deployment_mode: online
+    region: global
+    model_id: "llama-4-maverick"
+    model_family: Llama 4
+    modality: text
+    billing_unit: per_million_tokens
+    input_per_mtok: 0.50
+    output_per_mtok: 0.77
+    cached_input_per_mtok: 0.25
+    batch_multiplier: 0.5
+    notes: >
+      Verified from groq.com/pricing and pricepertoken.com 2026-05-12. Llama 4
+      Maverick at $0.50/$0.77. Cached input at 50% discount. Batch at 50%.
+      Also available: Llama 4 Scout at $0.11/$0.34. Groq's LPU architecture
+      optimizes for latency; pricing is higher per-token than Together/Fireworks
+      but with faster TTFT/TPOT.
+
+  # --- AWS Bedrock ---
+
+  - snapshot_id: bedrock-ondemand-us-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://aws.amazon.com/bedrock/pricing/
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example: []
+    body_claim_allowed: false
+    provider: AWS Bedrock
+    platform: cloud_marketplace
+    deployment_mode: on_demand
+    region: us
+    model_id: null
+    billing_unit: per_million_tokens
+    notes: >
+      Bedrock pricing is model-specific and region-specific. On-demand, batch,
+      provisioned throughput, and cross-region inference have different surfaces.
+      Cache read/write tokens are separate billing categories.
+      Not refreshed this pass — no examples depend on Bedrock prices.
+
+  # --- Cohere ---
+
+  - snapshot_id: cohere-rerank-online-global-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://cohere.com/pricing
+    source_type: official_pricing
+    volatility: high
+    refresh_before: pre_example
+    used_by_example: []
+    body_claim_allowed: false
+    provider: Cohere
+    platform: first_party_api
+    deployment_mode: online
+    region: global
+    model_id: null
+    billing_unit: per_query  # rerank uses search units
+    notes: >
+      Cohere uses search units for rerank, token-based for generation and embeddings,
+      and hourly/monthly for Model Vault dedicated instances. Non-token billing unit
+      is useful for RAG economics examples.
+      Not refreshed this pass — no examples depend on Cohere prices.

@@ -1,0 +1,75 @@
+{
+  "example": "Benchmark Audit \u2014 Support RAG Answer Drafting",
+  "views": [
+    "Goodput Frontier Test v1",
+    "RouteFit Matrix v1",
+    "LCPR-2026"
+  ],
+  "methodology_gaps": [
+    {
+      "field": "arrival_mode",
+      "naive": "closed_loop",
+      "corrected": "poisson",
+      "effect": "Closed-loop under-counts queueing delay at high load"
+    },
+    {
+      "field": "cache_state",
+      "naive": "cold",
+      "corrected": "warm",
+      "effect": "Cold cache inflates TTFT; warm cache reflects steady-state"
+    },
+    {
+      "field": "cold_starts",
+      "naive": "excluded",
+      "corrected": "included",
+      "effect": "Excluding cold starts hides tail latency"
+    },
+    {
+      "field": "retry_policy",
+      "naive": "none",
+      "corrected": "exponential_backoff",
+      "effect": "No retries ignores production retry cost"
+    },
+    {
+      "field": "latency_metric",
+      "naive": "mean",
+      "corrected": "p99",
+      "effect": "Mean hides tail; p99 exposes SLO violations"
+    }
+  ],
+  "routes": {
+    "route_a": {
+      "name": "Provider-X / Model-Alpha (serverless)",
+      "goodput": {
+        "total_requests": 100,
+        "accepted_requests": 58,
+        "goodput_rate": 5.8,
+        "cost_per_accepted": 0.018965517241379307,
+        "total_cost": 1.0999999999999999,
+        "ttft_p99_ms": 1400.0,
+        "tpot_p99_ms": 55.0,
+        "quality_pass_rate": 0.72,
+        "latency_pass_rate": 0.66
+      }
+    },
+    "route_b": {
+      "name": "Provider-Y / Model-Beta (serverless)",
+      "goodput": {
+        "total_requests": 100,
+        "accepted_requests": 85,
+        "goodput_rate": 8.5,
+        "cost_per_accepted": 0.017058823529411765,
+        "total_cost": 1.4500000000000002,
+        "ttft_p99_ms": 900.0,
+        "tpot_p99_ms": 35.0,
+        "quality_pass_rate": 0.91,
+        "latency_pass_rate": 0.88
+      }
+    },
+    "analysis": {
+      "winner_by_naive_throughput": "route_a",
+      "winner_by_goodput_cost": "route_b",
+      "reversal": true
+    }
+  }
+}

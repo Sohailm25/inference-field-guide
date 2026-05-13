@@ -1,0 +1,100 @@
+# ABOUTME: Calculator seed for the Coding Agent Task Lifecycle worked example.
+# ABOUTME: Numbers match Part 3 Ch 12 and Appendix A.3 Example 2.
+
+example_name: "Coding Agent Task Lifecycle"
+example_version: "v1"
+evidence_label: SYNTHETIC
+
+calculator_views:
+  - LCPR-2026
+  - Cache Policy Gate v1
+  - Goodput Frontier Test v1
+
+# --- Workload Identity ---
+workload_identity:
+  workload_id: coding-agent-v1
+  workload_class: agentic_multi_turn
+  accepted_work_unit: accepted_task
+  slo_class: background
+  input_token_distribution:
+    p50: 178000    # single task total input
+    p95: 450000
+  output_token_distribution:
+    p50: 18000     # single task total output
+    p95: 45000
+  quality_floor: 0.90
+
+# --- Single task trace (Part 3 Ch 12 worked example) ---
+task_trace:
+  phases:
+    - name: planning
+      llm_calls: 2
+      input_tokens: 12000
+      output_tokens: 2400
+      cache_read_tokens: 8000
+      tool_calls: 0
+    - name: file_reading
+      llm_calls: 4
+      input_tokens: 34000
+      output_tokens: 1600
+      cache_read_tokens: 24000
+      tool_calls: 6
+    - name: implementation
+      llm_calls: 3
+      input_tokens: 42000
+      output_tokens: 4800
+      cache_read_tokens: 32000
+      tool_calls: 4
+    - name: test_and_revise
+      llm_calls: 8
+      input_tokens: 68000
+      output_tokens: 6200
+      cache_read_tokens: 48000
+      tool_calls: 12
+    - name: compaction
+      llm_calls: 1
+      input_tokens: 4000
+      output_tokens: 1800
+      cache_read_tokens: 0       # compaction destroys cache
+      tool_calls: 0
+    - name: final_verify
+      llm_calls: 2
+      input_tokens: 18000
+      output_tokens: 1200
+      cache_read_tokens: 14000
+      tool_calls: 3
+
+  totals:
+    llm_calls: 20
+    input_tokens: 178000
+    output_tokens: 18000
+    cache_read_tokens: 126000
+    tool_calls: 25
+
+  derived:
+    fanout_multiplier: 20        # 20 LLM calls per 1 user request
+    token_fanout: 89             # 178K input from 2K user prompt
+    cache_hit_rate: 0.708        # 126K / 178K
+
+# --- Fleet-level economics (Appendix A.3 Example 2) ---
+fleet:
+  tasks_per_day: 200
+  acceptance_rate: 0.90          # 65% first-pass + 25% repaired
+  first_pass_success: 0.65
+  repaired_success: 0.25
+  manual_takeover: 0.10
+  main_agent_cache_hit_rate: 0.82
+  sub_agent_cache_hit_rate: 0.45
+
+# --- Pricing (Anthropic Sonnet-class, 2026-05-12 snapshot) ---
+pricing:
+  input_per_m: 3.00
+  output_per_m: 15.00
+  cache_write_per_m: 3.75
+  cache_read_per_m: 0.30
+
+# --- Goodput test parameters ---
+goodput_test:
+  ttft_slo_ms: 5000              # agent tasks tolerate higher TTFT
+  tpot_slo_ms: 80
+  duration_seconds: 3600         # 1 hour window

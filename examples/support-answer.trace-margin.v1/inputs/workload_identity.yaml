@@ -1,0 +1,46 @@
+# ABOUTME: Workload identity for the trace-to-margin worked example.
+# ABOUTME: Defines the accepted work unit, SLO class, and constraints.
+
+workload_id: support-answer-draft
+workload_class: rag_answer_drafting
+description: >
+  Customer-support answer drafting powered by RAG retrieval and LLM generation.
+  Each accepted work unit is one support answer that passes quality gate,
+  meets latency SLO, and complies with data-handling constraints.
+
+accepted_work_unit:
+  name: "accepted support answer"
+  definition: >
+    One support answer that: (1) passes automated eval with score >= 0.85,
+    (2) completes within 5 seconds E2E, (3) requires no human escalation,
+    (4) complies with data residency requirements.
+  quality_floor: 0.85
+  human_review_trigger: "eval score < 0.70 OR flagged content"
+
+slo:
+  class: interactive
+  ttft_ms: 800
+  e2e_ms: 5000
+  p99_ttft_ms: 1200
+  p99_e2e_ms: 8000
+  streaming: true
+
+demand_shape:
+  peak_rps: 50
+  median_rps: 15
+  burst_factor: 3.5
+  daily_pattern: "business hours with lunch spike"
+  session_length_requests: 3  # average requests per support ticket
+
+data_constraints:
+  data_residency: us
+  zero_data_retention: false
+  private_networking: false
+  pii_in_prompt: true  # customer data in retrieval context
+  content_logging: restricted  # no full prompt logging in production
+
+model_requirements:
+  min_context_window: 32000  # retrieval context + conversation
+  tool_use: true  # knowledge base lookup, ticket system
+  structured_output: true  # answer format compliance
+  languages: [en]

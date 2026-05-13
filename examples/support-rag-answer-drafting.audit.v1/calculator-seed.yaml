@@ -1,0 +1,125 @@
+# ABOUTME: Calculator seed for the Benchmark Audit worked example.
+# ABOUTME: Numbers match Part 5 Ch 23 and Appendix A.3 Example 3.
+
+example_name: "Benchmark Audit — Support RAG Answer Drafting"
+example_version: "v1"
+evidence_label: SYNTHETIC
+
+calculator_views:
+  - Goodput Frontier Test v1
+  - RouteFit Matrix v1
+  - LCPR-2026
+
+# --- Workload Identity ---
+workload_identity:
+  workload_id: support-rag-drafting-v1
+  workload_class: human_waiting_streaming
+  accepted_work_unit: accepted_draft
+  slo_class: interactive
+  ttft_slo_ms: 800
+  tpot_slo_ms: 50
+  input_token_distribution:
+    p50: 4200
+    p95: 8000
+  output_token_distribution:
+    p50: 350
+    p95: 900
+  quality_floor: 0.85
+
+# --- Route A: naive benchmark winner ---
+route_a:
+  name: "Provider-X / Model-Alpha (serverless)"
+  naive_benchmark:
+    arrival_mode: closed_loop
+    cache_state: cold
+    cold_starts_included: false
+    retry_policy: none
+    latency_metric: mean
+    throughput_tps: 2500           # claimed throughput
+    mean_latency_ms: 180
+
+  corrected_benchmark:
+    arrival_mode: poisson
+    cache_state: warm
+    cold_starts_included: true
+    retry_policy: exponential_backoff
+    latency_metric: p99
+
+  # Per-request data for Goodput Frontier Test (100 requests, 10s window)
+  # Matches test fixture: 72% quality, 80% TTFT pass, 58 accepted
+  goodput_requests:
+    total: 100
+    duration_seconds: 10
+    quality_pass_count: 72
+    ttft_pass_count: 80            # pass TTFT SLO at 800ms
+    tpot_pass_count: 90            # pass TPOT SLO at 50ms
+    accepted_count: 58             # pass ALL gates
+    cost_per_request: 0.011
+    passing_ttft_ms: 500
+    failing_ttft_ms: 1400
+    passing_tpot_ms: 45
+    failing_tpot_ms: 55
+
+  eval_pass_rate: 0.72
+
+# --- Route B: goodput winner ---
+route_b:
+  name: "Provider-Y / Model-Beta (serverless)"
+  corrected_benchmark:
+    arrival_mode: poisson
+    cache_state: warm
+    cold_starts_included: true
+    retry_policy: exponential_backoff
+    latency_metric: p99
+
+  # Per-request data for Goodput Frontier Test (100 requests, 10s window)
+  # Matches test fixture: 91% quality, 85 accepted (all 85 pass all gates)
+  goodput_requests:
+    total: 100
+    duration_seconds: 10
+    quality_pass_count: 91
+    ttft_pass_count: 94
+    accepted_count: 85             # pass ALL gates
+    cost_per_request: 0.0145
+    passing_ttft_ms: 500
+    failing_ttft_ms: 900
+    passing_tpot_ms: 35
+
+  eval_pass_rate: 0.91
+
+# --- Missing methodology checklist ---
+# Documents exactly which benchmark gaps created the false winner
+methodology_gaps:
+  - field: arrival_mode
+    naive: closed_loop
+    corrected: poisson
+    effect: "Closed-loop under-counts queueing delay at high load"
+  - field: cache_state
+    naive: cold
+    corrected: warm
+    effect: "Cold cache inflates TTFT; warm cache reflects steady-state"
+  - field: cold_starts
+    naive: excluded
+    corrected: included
+    effect: "Excluding cold starts hides tail latency"
+  - field: retry_policy
+    naive: none
+    corrected: exponential_backoff
+    effect: "No retries ignores production retry cost"
+  - field: latency_metric
+    naive: mean
+    corrected: p99
+    effect: "Mean hides tail; p99 exposes SLO violations"
+
+# --- Expected results (for verification) ---
+expected:
+  route_a:
+    accepted_requests: 58
+    goodput_rate: 5.8
+    cost_per_accepted: 0.019
+  route_b:
+    accepted_requests: 85
+    goodput_rate: 8.5
+    cost_per_accepted: 0.017
+  winner_by_throughput: route_a   # higher total throughput
+  winner_by_goodput: route_b      # lower cost per accepted result

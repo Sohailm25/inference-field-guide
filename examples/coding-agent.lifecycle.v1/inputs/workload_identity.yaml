@@ -1,0 +1,62 @@
+# ABOUTME: Workload identity for the agent task-lifecycle worked example.
+# ABOUTME: Defines the coding agent task, acceptance criteria, and constraints.
+
+workload_id: coding-agent-bugfix
+workload_class: coding_agent
+description: >
+  Autonomous coding agent that receives a bug report, investigates the codebase,
+  writes a fix, runs tests, and submits for human review. One accepted work unit
+  is one merged fix that passes tests and code review.
+
+accepted_work_unit:
+  name: "accepted bug fix"
+  definition: >
+    One code change that: (1) passes all existing tests, (2) includes a test
+    for the bug, (3) passes code review, (4) does not introduce regressions.
+  quality_floor: "tests pass AND review approved"
+  human_review_trigger: "always - every fix requires human code review"
+
+slo:
+  class: background
+  wall_time_budget_minutes: 45
+  no_hard_latency_slo: true  # human-waiting but not interactive
+  streaming: false  # agent works in background
+
+demand_shape:
+  tasks_per_day: 20  # team-level
+  concurrent_tasks: 5
+  burst_factor: 2
+  daily_pattern: "developer working hours"
+
+agent_architecture:
+  main_agent: true
+  subagent_support: true
+  max_subagent_depth: 2
+  compaction_policy: "compact when context exceeds 100K tokens"
+  compaction_target: 20000
+  retry_policy: "retry tool failures up to 2 times"
+  repair_policy: "re-attempt with error context on test failure"
+
+tools:
+  - name: file_read
+    latency_ms: 50
+    cost: free  # local tool
+  - name: file_write
+    latency_ms: 50
+    cost: free
+  - name: bash_execute
+    latency_ms: 500  # varies by command
+    cost: free
+  - name: grep_search
+    latency_ms: 100
+    cost: free
+  - name: test_runner
+    latency_ms: 5000  # test suite execution
+    cost: free
+
+data_constraints:
+  data_residency: us
+  zero_data_retention: false
+  private_networking: false
+  source_code_in_prompt: true  # private repo code in context
+  content_logging: restricted

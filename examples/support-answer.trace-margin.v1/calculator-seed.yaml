@@ -1,0 +1,61 @@
+# ABOUTME: Calculator seed for the Support Answer Trace-to-Margin worked example.
+# ABOUTME: Numbers match Part 5 Ch 24 and Appendix A.3 Example 1.
+
+example_name: "Support Answer Trace-to-Margin"
+example_version: "v1"
+evidence_label: SYNTHETIC
+
+calculator_views:
+  - LCPR-2026
+  - Trace-to-Margin Review v1
+  - Cache Policy Gate v1
+
+# --- Workload Identity ---
+workload_identity:
+  workload_id: support-chat-v2
+  workload_class: human_waiting_streaming
+  accepted_work_unit: accepted_resolution
+  slo_class: interactive
+  ttft_slo_ms: 800
+  e2e_slo_ms: 5000
+  input_token_distribution:
+    p50: 2800
+    p95: 8500
+  output_token_distribution:
+    p50: 350
+    p95: 1200
+  quality_floor: 0.82
+  cache_prefix_tokens: 1800
+  cache_hit_rate_target: 0.60
+
+# --- Trace-to-Margin Inputs (Part 5 Ch 24 worked example) ---
+trace_to_margin:
+  trace_cost: 14200.00          # C_trace: sum of per-request costs from traces
+  invoice_amount: 14850.00      # C_invoice: provider invoice for the period
+  # delta = 650 (4.4% — within 5% threshold)
+  eval_cost: 800.00             # Model-grader cost for the period
+  human_cost: 1000.00           # 500 escalated cases at $2.00 each
+  ops_cost: 2500.00             # Monitoring, on-call, deployment overhead
+  total_attempts: 100000        # Total requests in the period
+  accepted_units: 82000         # Requests passing quality + latency + reliability gates
+  revenue_per_unit: 0.54878     # Account revenue / accepted units ($45,000 / 82,000)
+
+# --- Expected outputs (for verification) ---
+expected:
+  total_loaded_cost: 19150.00
+  lcpr: 0.234                   # $19,150 / 82,000
+  naive_cost_per_request: 0.142 # $14,200 / 100,000
+  lcpr_to_naive_ratio: 1.65     # LCPR / naive (note: appendix says 12x but that uses
+                                # different scale — the 12x ratio is from the test fixture
+                                # at 1/100th scale where human cost dominates)
+  account_revenue: 45000.00
+  gross_margin: 25850.00
+  gross_margin_pct: 0.574
+
+# --- Cache analysis inputs ---
+cache:
+  expected_hit_rate: 0.60
+  actual_hit_rate: 0.35         # Appendix: "expected 60% vs actual 35%"
+  cache_write_price_per_m: 3.75 # Anthropic Sonnet-class cache write
+  cache_read_price_per_m: 0.30  # Anthropic Sonnet-class cache read
+  uncached_input_price_per_m: 3.00  # Anthropic Sonnet-class standard input

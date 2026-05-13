@@ -18,11 +18,14 @@ import streamlit as st
 
 from calculator.lcpr import (
     HOURS_PER_MONTH,
+    GoodputRequest,
     LCPRCalculator,
     SECONDS_PER_MONTH,
     WorkloadProfile,
     compute_break_even,
+    compute_goodput,
     compute_lcpr,
+    compute_trace_to_margin,
     load_provider_pricing,
 )
 from calculator.readiness import (
@@ -166,7 +169,7 @@ def _tab_comparison(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
     """Tab 1: LCPR comparison table and bar chart."""
     st.subheader("LCPR Comparison")
     st.markdown(
-        "Loaded Cost Per Request across all providers, ranked lowest to highest. "
+        "Loaded Cost Per Result across all providers, ranked lowest to highest. "
         "LCPR includes token cost, retries, repair, and engineering overhead."
     )
 
@@ -838,6 +841,251 @@ def _tab_readiness(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
             st.warning(f"**{gap}**")
 
 
+def _tab_goodput() -> None:
+    """Tab 6: Goodput Frontier Test — compare routes by accepted work under SLO."""
+    st.subheader("Goodput Frontier Test")
+    st.markdown(
+        "Compare two routes by cost per accepted result under SLO. "
+        "A route with higher total cost can still win if it produces more "
+        "accepted work. Based on Derivation 5."
+    )
+
+    st.markdown("#### SLO Thresholds")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        ttft_slo = st.number_input("TTFT SLO (ms)", 100, 5000, 800, step=100)
+    with col2:
+        tpot_slo = st.number_input("TPOT SLO (ms/tok)", 10, 200, 50, step=5)
+    with col3:
+        duration = st.number_input("Test duration (seconds)", 1, 600, 10, step=1)
+
+    st.markdown("---")
+
+    routes = {}
+    for label, col in zip(["Route A", "Route B"], st.columns(2)):
+        with col:
+            st.markdown(f"#### {label}")
+            n = st.number_input(
+                "Total requests", 10, 10000, 100, step=10, key=f"{label}_n",
+            )
+            quality_rate = st.slider(
+                "Quality pass rate", 0.0, 1.0, 0.85, 0.01, key=f"{label}_qr",
+            )
+            latency_rate = st.slider(
+                "Latency pass rate (meet TTFT+TPOT SLO)", 0.0, 1.0, 0.90, 0.01,
+                key=f"{label}_lr",
+            )
+            cost_per_req = st.number_input(
+                "Cost per request ($)", 0.001, 1.0, 0.011, 0.001,
+                format="%.3f", key=f"{label}_cpr",
+            )
+            ttft_pass = st.number_input(
+                "TTFT when passing (ms)", 50, 5000, 500, step=50,
+                key=f"{label}_ttft_pass",
+            )
+            ttft_fail = st.number_input(
+                "TTFT when failing (ms)", 50, 5000, 1400, step=50,
+                key=f"{label}_ttft_fail",
+            )
+
+            # Build synthetic requests from the summary stats
+            n_quality_pass = int(n * quality_rate)
+            n_latency_pass = int(n * latency_rate)
+            # Accepted = pass both. Approximate intersection:
+            n_both = int(n * quality_rate * latency_rate)
+            requests = []
+            for i in range(n):
+                if i < n_both:
+                    qp, ttft = True, float(ttft_pass)
+                elif i < n_quality_pass:
+                    qp, ttft = True, float(ttft_fail)
+                elif i < n_quality_pass + (n_latency_pass - n_both):
+                    qp, ttft = False, float(ttft_pass)
+                else:
+                    qp, ttft = False, float(ttft_fail)
+                requests.append(GoodputRequest(
+                    ttft_ms=ttft,
+                    tpot_ms=float(tpot_slo - 10) if ttft == ttft_pass else float(tpot_slo + 20),
+                    output_tokens=200,
+                    quality_pass=qp,
+                    cost=cost_per_req,
+                ))
+            routes[label] = requests
+
+    st.markdown("---")
+    st.markdown("#### Results")
+
+    results = {}
+    for label, reqs in routes.items():
+        results[label] = compute_goodput(reqs, float(duration), float(ttft_slo), float(tpot_slo))
+
+    cols = st.columns(2)
+    for (label, r), col in zip(results.items(), cols):
+        with col:
+            st.markdown(f"**{label}**")
+            st.metric("Accepted requests", r.accepted_requests)
+            st.metric("Goodput (accepted/sec)", f"{r.goodput_rate:.1f}")
+            st.metric("Cost per accepted", f"${r.cost_per_accepted:.4f}")
+            st.metric("Total cost", f"${r.total_cost:.2f}")
+            st.metric("Quality pass rate", f"{r.quality_pass_rate:.0%}")
+            st.metric("Latency pass rate", f"{r.latency_pass_rate:.0%}")
+
+    # Comparison chart
+    chart_data = []
+    for label, r in results.items():
+        chart_data.append({"Route": label, "Metric": "Cost/accepted ($)", "Value": r.cost_per_accepted})
+    for label, r in results.items():
+        chart_data.append({"Route": label, "Metric": "Goodput (req/s)", "Value": r.goodput_rate})
+
+    winner = min(results, key=lambda k: results[k].cost_per_accepted)
+    loser = max(results, key=lambda k: results[k].cost_per_accepted)
+    if results[winner].cost_per_accepted < results[loser].cost_per_accepted:
+        savings_pct = (1 - results[winner].cost_per_accepted / results[loser].cost_per_accepted) * 100
+        st.success(
+            f"**{winner}** wins on cost per accepted result "
+            f"(${results[winner].cost_per_accepted:.4f} vs "
+            f"${results[loser].cost_per_accepted:.4f}, "
+            f"{savings_pct:.0f}% cheaper per accepted unit)."
+        )
+
+
+def _tab_trace_to_margin() -> None:
+    """Tab 7: Trace-to-Margin reconciliation — Derivation 6."""
+    st.subheader("Trace-to-Margin Review")
+    st.markdown(
+        "Reconcile trace-derived inference cost with the provider invoice, "
+        "add non-inference cost layers, compute LCPR, and calculate gross margin. "
+        "Based on Derivation 6."
+    )
+
+    st.markdown("#### Cost Components")
+    col1, col2 = st.columns(2)
+    with col1:
+        trace_cost = st.number_input(
+            "Trace-derived inference cost ($)", 0.0, 100000.0, 14.20,
+            format="%.2f",
+        )
+        invoice_amount = st.number_input(
+            "Provider invoice amount ($)", 0.0, 100000.0, 14.85,
+            format="%.2f",
+        )
+        eval_cost = st.number_input(
+            "Eval grader cost ($)", 0.0, 100000.0, 0.80,
+            format="%.2f",
+        )
+    with col2:
+        human_cost = st.number_input(
+            "Human escalation cost ($)", 0.0, 1000000.0, 100.00,
+            format="%.2f",
+        )
+        ops_cost = st.number_input(
+            "Ops overhead ($)", 0.0, 100000.0, 25.00,
+            format="%.2f",
+        )
+
+    st.markdown("#### Volume")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        total_attempts = st.number_input(
+            "Total attempts", 1, 10000000, 1000, step=100,
+        )
+    with col2:
+        accepted_units = st.number_input(
+            "Accepted units", 1, 10000000, 820, step=10,
+        )
+    with col3:
+        revenue_per_unit = st.number_input(
+            "Revenue per accepted unit ($)", 0.0, 10000.0, 0.25,
+            format="%.2f",
+        )
+
+    st.markdown("---")
+
+    result = compute_trace_to_margin(
+        trace_cost=trace_cost,
+        invoice_amount=invoice_amount,
+        eval_cost=eval_cost,
+        human_cost=human_cost,
+        ops_cost=ops_cost,
+        total_attempts=total_attempts,
+        accepted_units=accepted_units,
+        revenue_per_unit=revenue_per_unit,
+    )
+
+    # Summary metrics
+    st.markdown("#### Results")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("LCPR", f"${result.lcpr:.4f}")
+    with col2:
+        st.metric("Naive cost/unit", f"${result.naive_cost_per_unit:.4f}")
+    with col3:
+        st.metric("LCPR / Naive", f"{result.lcpr_to_naive_ratio:.1f}x")
+    with col4:
+        delta_color = "normal" if result.gross_margin >= 0 else "inverse"
+        st.metric("Gross margin", f"${result.gross_margin:.2f}", delta_color=delta_color)
+
+    # Cost waterfall
+    st.markdown("#### Cost Waterfall")
+    waterfall_data = [
+        ("Trace inference", result.trace_cost),
+        ("Invoice delta", result.delta),
+        ("Eval grader", result.eval_cost),
+        ("Human escalation", result.human_cost),
+        ("Ops overhead", result.ops_cost),
+    ]
+
+    fig = go.Figure(go.Waterfall(
+        name="Cost",
+        orientation="v",
+        x=[w[0] for w in waterfall_data],
+        y=[w[1] for w in waterfall_data],
+        connector={"line": {"color": "rgb(63, 63, 63)"}},
+        increasing={"marker": {"color": "#e74c3c"}},
+        totals={"marker": {"color": "#7FBBB3"}},
+        text=[f"${w[1]:.2f}" for w in waterfall_data],
+        textposition="outside",
+    ))
+    fig.update_layout(
+        title=f"Loaded Cost Buildup: ${result.total_loaded_cost:.2f}",
+        showlegend=False,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font_color="#e8e8e8",
+        height=400,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Component breakdown table
+    st.markdown("#### Component Breakdown")
+    total = result.total_loaded_cost
+    rows = [
+        {"Component": "Inference (trace)", "Amount": f"${result.trace_cost:.2f}",
+         "% of LCPR": f"{result.trace_cost / total * 100:.1f}%"},
+        {"Component": "Invoice delta", "Amount": f"${result.delta:.2f}",
+         "% of LCPR": f"{result.delta / total * 100:.1f}%"},
+        {"Component": "Eval grader", "Amount": f"${result.eval_cost:.2f}",
+         "% of LCPR": f"{result.eval_cost / total * 100:.1f}%"},
+        {"Component": "Human escalation", "Amount": f"${result.human_cost:.2f}",
+         "% of LCPR": f"{result.human_cost / total * 100:.1f}%"},
+        {"Component": "Ops overhead", "Amount": f"${result.ops_cost:.2f}",
+         "% of LCPR": f"{result.ops_cost / total * 100:.1f}%"},
+        {"Component": "**Total**", "Amount": f"**${total:.2f}**",
+         "% of LCPR": "**100%**"},
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    # Margin summary
+    st.markdown("#### Margin Analysis")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Revenue", f"${result.revenue:.2f}")
+    with col2:
+        st.metric("Total loaded cost", f"${result.total_loaded_cost:.2f}")
+    with col3:
+        st.metric("Margin %", f"{result.gross_margin_pct:.1%}")
+
+
 def main() -> None:
     st.set_page_config(
         page_title="Inference Field Guide Calculator",
@@ -860,7 +1108,7 @@ def main() -> None:
             r"{\text{successful\_requests}}"
         )
         st.markdown(
-            "**Loaded Cost Per Request** — the true cost of getting a "
+            "**Loaded Cost Per Result** — the true cost of getting a "
             "correct answer:\n"
             "- **Token cost**: (input × rate + output × rate) × total "
             "attempts\n"
@@ -951,12 +1199,14 @@ def main() -> None:
             })
         st.table(rows)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "LCPR Comparison",
         "Sensitivity Analysis",
         "Break-Even Analysis",
         "Migration Readiness",
         "Decision Trees",
+        "Goodput Frontier",
+        "Trace-to-Margin",
     ])
 
     with tab1:
@@ -969,6 +1219,10 @@ def main() -> None:
         _tab_readiness(calc, profile)
     with tab5:
         _tab_decision_trees()
+    with tab6:
+        _tab_goodput()
+    with tab7:
+        _tab_trace_to_margin()
 
 
 if __name__ == "__main__":

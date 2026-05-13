@@ -1,0 +1,160 @@
+# ABOUTME: Machine-readable model license and acceptable-use snapshot for route filter derivations.
+# ABOUTME: Captures license type, restrictions, and model card links for models used in examples.
+#
+# License is a route filter, not a feature comparison.
+# Body prose should teach the filter mechanism. Appendix carries exact terms per model.
+# Always use the specific model card and license file, not family-level generalizations.
+
+snapshot_date: "2026-05-12"
+schema_version: "1.0"
+
+models:
+
+  # --- Meta Llama ---
+
+  - model_family: Meta Llama 4
+    snapshot_id: meta-llama4-license-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://huggingface.co/meta-llama
+    source_type: official_model_card
+    volatility: medium
+    refresh_before: pre_model_example
+    used_by_example:
+      - support-rag-answer-drafting.audit.v1
+    body_claim_allowed: true  # as route filter mechanism
+    license_name: "Llama 4 Community License"
+    license_url: null  # confirm exact URL from selected model card
+    key_restrictions:
+      - "Revenue threshold trigger for additional licensing"
+      - "Acceptable use policy applies"
+      - "Output attribution requirements may apply"
+    commercial_use: true  # with conditions
+    modification_allowed: true
+    distribution_allowed: true  # with license terms
+    route_filter_implications:
+      - "Check revenue threshold against org revenue"
+      - "Acceptable use policy may restrict certain applications"
+      - "Fine-tune and derivative model distribution has conditions"
+    notes: >
+      Llama licensing is NOT Apache 2.0 or MIT. Each model version may have
+      different terms. Always check the specific model card for the checkpoint used.
+
+  - model_family: Meta Llama 3.x
+    snapshot_id: meta-llama3-license-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://huggingface.co/meta-llama
+    source_type: official_model_card
+    volatility: medium
+    refresh_before: pre_model_example
+    used_by_example: []
+    body_claim_allowed: true
+    license_name: "Llama 3 Community License / Llama 3.3 Community License"
+    key_restrictions:
+      - "700M MAU threshold for additional licensing"
+      - "Acceptable use policy"
+    commercial_use: true
+    notes: "Older Llama versions still in production. Confirm exact checkpoint license."
+
+  # --- Qwen ---
+
+  - model_family: Qwen3
+    snapshot_id: qwen3-license-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://huggingface.co/Qwen
+    source_type: official_model_card
+    volatility: medium
+    refresh_before: pre_model_example
+    used_by_example: []
+    body_claim_allowed: true
+    license_name: "Apache 2.0 for many checkpoints"
+    license_url: null  # varies by checkpoint
+    key_restrictions:
+      - "Some checkpoints may have different licenses"
+      - "Confirm exact checkpoint"
+    commercial_use: true
+    modification_allowed: true
+    distribution_allowed: true
+    route_filter_implications:
+      - "Apache 2.0 is the most permissive common license for open models"
+      - "Still verify per-checkpoint; family-level generalization is unsafe"
+    notes: >
+      Many Qwen3 checkpoints are Apache 2.0, but confirm the exact selected
+      checkpoint. Do not generalize from "Qwen is Apache" across all variants.
+
+  # --- DeepSeek ---
+
+  - model_family: DeepSeek-V3.1
+    snapshot_id: deepseek-v3.1-license-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://huggingface.co/deepseek-ai/DeepSeek-V3.1
+    source_type: official_model_card
+    volatility: medium
+    refresh_before: pre_model_example
+    used_by_example: []
+    body_claim_allowed: true
+    license_name: MIT
+    parameters_total: "671B"
+    parameters_active: "37B"
+    context_window: 128000
+    key_restrictions:
+      - "MIT license is permissive"
+      - "MoE architecture: 671B total, 37B active per token"
+    commercial_use: true
+    modification_allowed: true
+    distribution_allowed: true
+    route_filter_implications:
+      - "MIT is highly permissive"
+      - "MoE serving requirements differ from dense models"
+      - "All-to-all communication for expert routing adds topology requirements"
+    notes: >
+      DeepSeek-V3.1 is MIT-licensed MoE. The 37B active parameter count is
+      relevant for serving physics (memory bandwidth vs compute). The 671B total
+      is relevant for weight storage and loading time.
+
+  # --- Mistral ---
+
+  - model_family: Mistral (open models)
+    snapshot_id: mistral-open-license-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://help.mistral.ai/en/articles/347393-under-which-license-are-mistral-s-open-models-available
+    source_type: official_docs
+    volatility: medium
+    refresh_before: pre_model_example
+    used_by_example: []
+    body_claim_allowed: true  # as route filter example
+    license_name: "Apache 2.0 for some; Mistral Research License for others"
+    key_restrictions:
+      - "License varies by model"
+      - "Some models have research-only licenses"
+      - "Commercial models (e.g., Mistral Large) have separate API-only terms"
+    route_filter_implications:
+      - "Must distinguish Apache 2.0 models from research-only models"
+      - "API-only models cannot be self-hosted"
+    notes: >
+      Mistral uses different licenses for different models. The help page is
+      an index, not a universal license. Always check the specific model card.
+
+  # --- Google Gemma ---
+
+  - model_family: Google Gemma
+    snapshot_id: google-gemma-license-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://ai.google.dev/gemma/terms
+    source_type: official_license
+    volatility: medium
+    refresh_before: pre_model_example
+    used_by_example: []
+    body_claim_allowed: true
+    license_name: "Gemma Terms of Use"
+    key_restrictions:
+      - "Not Apache 2.0 or MIT"
+      - "Redistribution has specific conditions"
+      - "Acceptable use policy applies"
+      - "Revenue threshold may apply for certain uses"
+    commercial_use: true  # with conditions
+    route_filter_implications:
+      - "Gemma terms differ from standard OSS licenses"
+      - "Must review terms for redistribution and modification"
+    notes: >
+      Gemma license terms are custom and differ from Apache/MIT-style models.
+      Refresh before using Gemma in examples because terms can change.

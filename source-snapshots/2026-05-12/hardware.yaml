@@ -1,0 +1,249 @@
+# ABOUTME: Machine-readable hardware accelerator specs for serving physics derivations.
+# ABOUTME: Captures HBM capacity, bandwidth, interconnect, TDP, and precision for inference sizing.
+#
+# These are product-page specs, not measured serving goodput numbers.
+# Body prose should use specs as sizing inputs; appendix carries the full table.
+# Pair with local goodput traces before making architecture claims.
+
+snapshot_date: "2026-05-12"
+schema_version: "1.0"
+
+accelerators:
+
+  # --- NVIDIA ---
+
+  - accelerator: NVIDIA H100 SXM
+    snapshot_id: nvidia-h100-sxm-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://www.nvidia.com/en-us/data-center/h100/
+    source_type: official_hardware_spec
+    volatility: medium
+    refresh_before: monthly
+    used_by_example:
+      - support-rag-answer-drafting.audit.v1
+    body_claim_allowed: true  # as sizing input with caveats
+    hbm_type: HBM3
+    hbm_gb: 80
+    hbm_bandwidth_tbps: 3.35
+    interconnect: NVLink 4th gen
+    nvlink_bandwidth_gbps: 900  # bidirectional
+    tdp_watts: 700
+    precision_surface:
+      - FP64
+      - TF32
+      - FP16
+      - BF16
+      - FP8
+      - INT8
+    mig_support: true
+    scale_up_topology: "8-GPU NVLink domain; NVSwitch"
+    notes: >
+      H100 SXM is the baseline for most 2024-2025 inference deployments.
+      80 GB HBM3 is the binding constraint for large models without tensor parallelism.
+      FP8 support enables ~2x KV cache density vs FP16.
+
+  - accelerator: NVIDIA H200 SXM
+    snapshot_id: nvidia-h200-sxm-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://www.nvidia.com/en-us/data-center/h200/
+    source_type: official_hardware_spec
+    volatility: medium
+    refresh_before: monthly
+    used_by_example:
+      - support-rag-answer-drafting.audit.v1
+    body_claim_allowed: true
+    hbm_type: HBM3e
+    hbm_gb: 141
+    hbm_bandwidth_tbps: 4.8
+    interconnect: NVLink 4th gen
+    nvlink_bandwidth_gbps: 900
+    tdp_watts: 700
+    precision_surface:
+      - FP64
+      - TF32
+      - FP16
+      - BF16
+      - FP8
+      - INT8
+    mig_support: true
+    scale_up_topology: "8-GPU NVLink domain; NVSwitch"
+    notes: >
+      H200 provides ~76% more HBM capacity and ~43% more bandwidth vs H100 SXM.
+      Key for long-context KV cache sizing derivations. Same NVLink topology.
+
+  - accelerator: NVIDIA GB200 NVL72
+    snapshot_id: nvidia-gb200-nvl72-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://www.nvidia.com/en-us/data-center/gb200-nvl72/
+    source_type: official_hardware_spec
+    volatility: medium
+    refresh_before: monthly
+    used_by_example: []
+    body_claim_allowed: true  # as topology example with maturity caveat
+    hbm_type: HBM3e
+    hbm_gb: "per-GPU varies; 72-GPU rack aggregate"
+    hbm_bandwidth_tbps: null  # aggregate; product page varies
+    interconnect: NVLink 5th gen
+    nvlink_bandwidth_gbps: 1800  # per GPU bidirectional
+    tdp_watts: null  # rack-level
+    precision_surface:
+      - FP64
+      - TF32
+      - FP16
+      - BF16
+      - FP8
+      - FP4
+      - INT8
+    scale_up_topology: "72-GPU NVLink domain; liquid cooled rack"
+    notes: >
+      GB200 NVL72 is a rack-scale topology, not a drop-in GPU upgrade.
+      Use as advanced topology example. Maturity gates apply.
+      Pair with NVIDIA tuning guides or cloud instance docs before citing totals.
+
+  # --- AMD ---
+
+  - accelerator: AMD Instinct MI300X
+    snapshot_id: amd-mi300x-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html
+    source_type: official_hardware_spec
+    volatility: medium
+    refresh_before: monthly
+    used_by_example: []
+    body_claim_allowed: true  # as high-HBM comparison
+    hbm_type: HBM3
+    hbm_gb: 192
+    hbm_bandwidth_tbps: 5.3
+    interconnect: Infinity Fabric
+    tdp_watts: 750
+    precision_surface:
+      - FP64
+      - FP32
+      - FP16
+      - BF16
+      - FP8
+      - INT8
+    scale_up_topology: "8-GPU OAM platform"
+    notes: >
+      MI300X has highest single-GPU HBM capacity in this snapshot.
+      Useful for KV cache sizing comparisons. Software ecosystem (ROCm)
+      is a separate maturity gate. Confirm exact table rows before publication.
+
+  - accelerator: AMD Instinct MI350 series
+    snapshot_id: amd-mi350-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://www.amd.com/en/products/accelerators/instinct/mi350.html
+    source_type: official_hardware_spec
+    volatility: medium
+    refresh_before: monthly
+    used_by_example: []
+    body_claim_allowed: true
+    hbm_type: HBM3e
+    hbm_gb: 288  # per accelerator
+    hbm_bandwidth_tbps: null  # confirm from product page
+    interconnect: Infinity Fabric
+    tdp_watts: null
+    precision_surface:
+      - FP64
+      - FP32
+      - FP16
+      - BF16
+      - FP8
+      - MXFP4
+      - MXFP6
+    scale_up_topology: "8-GPU platform; aggregate totals on product page"
+    notes: >
+      MI350 introduces MXFP4/MXFP6 precision support. 288 GB per accelerator
+      is relevant for memory capacity comparisons. Confirm exact specs before use.
+
+  # --- Google TPU ---
+
+  - accelerator: Google TPU v6e (Trillium)
+    snapshot_id: google-tpuv6e-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://cloud.google.com/tpu/docs/v6e
+    source_type: official_hardware_spec
+    volatility: medium
+    refresh_before: monthly
+    used_by_example: []
+    body_claim_allowed: false  # TPU-specific; JAX/XLA caveats
+    hbm_type: HBM
+    hbm_gb: null  # per-chip; see docs
+    hbm_bandwidth_tbps: null
+    interconnect: ICI
+    tdp_watts: null
+    precision_surface:
+      - BF16
+      - INT8
+    scale_up_topology: "pod slices; 2D/3D torus"
+    notes: >
+      TPU v6e is the current GA inference-capable TPU.
+      JAX/XLA software stack is a requirement and maturity gate.
+      Use only for TPU-specific deployment examples.
+
+  - accelerator: Google TPU7x (Ironwood)
+    snapshot_id: google-tpu7x-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://docs.cloud.google.com/tpu/docs/tpu7x
+    source_type: official_hardware_spec
+    volatility: medium-high
+    refresh_before: monthly
+    used_by_example: []
+    body_claim_allowed: false  # preview; access conditions may change
+    hbm_type: HBM
+    hbm_gb: null
+    hbm_bandwidth_tbps: null
+    scale_up_topology: null
+    notes: >
+      Preview/early access. Specs and supported stack may change.
+      Include in appendix only with access-condition caveat.
+
+  # --- AWS Trainium ---
+
+  - accelerator: AWS Trainium3 (Trn3 UltraServers)
+    snapshot_id: aws-trn3-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://aws.amazon.com/ec2/instance-types/trn3/
+    source_type: official_hardware_spec
+    volatility: medium-high
+    refresh_before: monthly
+    used_by_example: []
+    body_claim_allowed: false  # vendor claims; needs local goodput pairing
+    hbm_type: HBM3e
+    hbm_gb: null  # per-chip; see instance docs
+    hbm_bandwidth_tbps: null
+    interconnect: NeuronLink
+    tdp_watts: null
+    scale_up_topology: "UltraServer; multi-node training/inference"
+    notes: >
+      Trainium3 is a cloud-controlled accelerator. Treat performance claims
+      as vendor claims unless paired with MLPerf or local traces.
+      AWS Neuron SDK is a required software stack.
+
+  # --- Edge / Legacy ---
+
+  - accelerator: NVIDIA T4
+    snapshot_id: nvidia-t4-20260512
+    accessed_at: "2026-05-12"
+    source_url: https://www.nvidia.com/en-us/data-center/tesla-t4/
+    source_type: official_hardware_spec
+    volatility: low
+    refresh_before: per_release
+    used_by_example: []
+    body_claim_allowed: true  # as edge/thermal example from public writings
+    hbm_type: GDDR6  # not HBM
+    memory_gb: 16
+    memory_bandwidth_gbps: 320
+    interconnect: PCIe
+    tdp_watts: 70
+    precision_surface:
+      - FP32
+      - FP16
+      - INT8
+      - INT4
+    scale_up_topology: "single PCIe card; no NVLink"
+    notes: >
+      T4 is relevant as edge/constraint example from QSR deployment.
+      16 GB GDDR6 limits model size and KV cache. 70W TDP means thermal
+      throttling at 83C is a real production constraint.
+      See Sohail's public post on T4 thermal throttling.

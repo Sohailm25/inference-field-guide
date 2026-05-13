@@ -1,0 +1,36 @@
+{
+  "example": "Coding Agent Task Lifecycle",
+  "views": [
+    "LCPR-2026",
+    "Cache Policy Gate v1",
+    "Goodput Frontier Test v1"
+  ],
+  "task_economics": {
+    "input_tokens": 178000,
+    "output_tokens": 18000,
+    "cache_read_tokens": 126000,
+    "cache_hit_rate": 0.708,
+    "fanout_multiplier": 20,
+    "token_fanout": 89,
+    "per_task_inference_cost": 0.4638,
+    "without_caching_cost": 0.804,
+    "cache_savings_ratio": 1.73
+  },
+  "fleet_economics": {
+    "tasks_per_month": 6000,
+    "accepted_per_month": 5400,
+    "monthly_inference_cost": 2782.8,
+    "lcpr_per_task": 0.5153
+  },
+  "goodput": {
+    "total_requests": 8,
+    "accepted_requests": 7,
+    "goodput_rate": 0.0019444444444444444,
+    "cost_per_accepted": 0.5300571428571429,
+    "total_cost": 3.7104,
+    "ttft_p99_ms": 5719.999999999999,
+    "tpot_p99_ms": 60.0,
+    "quality_pass_rate": 0.875,
+    "latency_pass_rate": 0.875
+  }
+}

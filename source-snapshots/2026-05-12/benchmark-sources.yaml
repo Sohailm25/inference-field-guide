@@ -1,0 +1,169 @@
+# ABOUTME: Machine-readable benchmark source index for Production Inference Economics.
+# ABOUTME: Captures benchmark suites, scenarios, result links, methodology, and caveats.
+#
+# These are methodology and result references, not performance claims.
+# Body prose should teach benchmark hygiene. Appendix carries result links.
+
+snapshot_date: "2026-05-12"
+schema_version: "1.0"
+
+benchmark_suites:
+
+  - suite: MLPerf Inference
+    snapshot_id: mlperf-inference-v6.0-20260512
+    accessed_at: "2026-05-12"
+    source_urls:
+      rules: https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc
+      methodology: https://mlcommons.org/2026/03/mlperf-inference-gpt-oss/
+      results_v6: https://mlcommons.org/2026/04/mlperf-inference-v6-0-results/
+      results_v5.1: https://mlcommons.org/2025/09/mlperf-inference-v5-1-results/
+      endpoints: https://mlcommons.org/benchmarks/endpoints/
+      docs: https://docs.mlcommons.org/inference/
+    source_type: benchmark_results
+    volatility: medium
+    refresh_before: per_release
+    used_by_example:
+      - support-rag-answer-drafting.audit.v1
+    body_claim_allowed: true  # as methodology reference, not performance claim
+    scenarios:
+      - name: Server/Interactive
+        description: "Poisson arrivals, 99th percentile latency constraint"
+        metric: "maximum supported Poisson throughput parameter"
+      - name: Offline
+        description: "All samples available at once, no latency constraint"
+        metric: "samples per second"
+    llm_workloads:
+      - GPT-OSS
+      - DeepSeek-R1
+    slo_metrics:
+      - TTFT
+      - TPOT
+    compliance: "split performance/accuracy datasets; compliance checks required"
+    caveats:
+      - "MLPerf is an optimized-stack benchmark, not a production workload test"
+      - "Vendor submissions are peak configurations, not default deployments"
+      - "Use as sanity check for hardware/stack capability, not as product goodput"
+    notes: >
+      MLPerf Endpoints program frames performance as full operating range with
+      concurrency curves, not single-point results. v6.0 adds LLM workloads
+      with TTFT/TPOT SLOs. Use v5.1 results as fallback if v6.0 is not yet published.
+
+  - suite: vLLM Benchmark Serving
+    snapshot_id: vllm-bench-serve-20260512
+    accessed_at: "2026-05-12"
+    source_urls:
+      docs: https://docs.vllm.ai/en/latest/api/vllm/benchmarks/serve/
+      metrics: https://docs.vllm.ai/en/latest/design/metrics/
+      prefix_caching: https://docs.vllm.ai/en/stable/design/prefix_caching/
+      anatomy: https://vllm.ai/blog/anatomy-of-vllm
+    source_type: official_docs
+    volatility: medium
+    refresh_before: pre_benchmark_chapter
+    used_by_example:
+      - support-rag-answer-drafting.audit.v1
+    body_claim_allowed: true  # as methodology reference
+    metrics:
+      - TTFT (p50, p95, p99)
+      - TPOT/ITL (p50, p95, p99)
+      - E2E latency (p50, p95, p99)
+      - "request throughput (req/s)"
+      - "output token throughput (tok/s)"
+      - "goodput (req/s meeting SLO)"
+    controls:
+      - request_rate
+      - concurrency
+      - burstiness
+      - streaming
+      - dataset (synthetic or real)
+    goodput_definition: "completed requests per second meeting user-defined SLO thresholds"
+    caveats:
+      - "vLLM benchmark is local engine benchmark, not end-to-end production test"
+      - "prefix cache warmth affects results; must document cold/warm protocol"
+      - "TPOT formula: (E2E - TTFT) / (output_tokens - 1)"
+
+  - suite: SGLang Benchmark Serving
+    snapshot_id: sglang-bench-serve-20260512
+    accessed_at: "2026-05-12"
+    source_urls:
+      docs: https://docs.sglang.io/developer_guide/bench_serving
+    source_type: official_docs
+    volatility: medium
+    refresh_before: pre_benchmark_chapter
+    used_by_example: []
+    body_claim_allowed: true  # as methodology reference
+    metrics:
+      - TTFT
+      - ITL
+      - E2E latency
+      - output throughput
+    controls:
+      - rate
+      - concurrency
+      - streaming
+      - datasets (synthetic and file-based)
+    output_format: "JSONL with input lengths, output lengths, TTFT arrays, ITL arrays, generated texts, errors"
+    caveats:
+      - "Same engine-level caveat as vLLM; not production end-to-end"
+
+  - suite: NVIDIA GenAI-Perf
+    snapshot_id: nvidia-genaiperf-20260512
+    accessed_at: "2026-05-12"
+    source_urls:
+      docs: https://docs.nvidia.com/deeplearning/triton-inference-server/archives/triton-inference-server-2580/user-guide/docs/perf_analyzer/genai-perf/README.html
+    source_type: official_docs
+    volatility: medium
+    refresh_before: pre_benchmark_chapter
+    used_by_example: []
+    body_claim_allowed: true
+    metrics:
+      - TTFT
+      - "inter-token latency"
+      - "output token throughput"
+      - "request throughput"
+    controls:
+      - concurrency
+      - request_rate
+      - synthetic input/output length parameters
+    caveats:
+      - "Triton-specific; results depend on model deployment and server config"
+
+  - suite: NVIDIA AIPerf
+    snapshot_id: nvidia-aiperf-20260512
+    accessed_at: "2026-05-12"
+    source_urls:
+      docs: https://docs.nvidia.com/aiperf/getting-started/ai-perf-comprehensive-llm-benchmarking
+    source_type: official_docs
+    volatility: medium
+    refresh_before: pre_benchmark_chapter
+    used_by_example: []
+    body_claim_allowed: true
+    metrics:
+      - "TPS/GPU (tokens per second per GPU)"
+      - "TPS/user (tokens per second per user)"
+      - p99 latency
+    controls:
+      - concurrency sweeps
+      - "Pareto curve between TPS/GPU and TPS/user"
+    caveats:
+      - "Vendor benchmark tool; results are input to analysis, not conclusions"
+
+  - suite: TensorRT-LLM Benchmark
+    snapshot_id: trtllm-bench-20260512
+    accessed_at: "2026-05-12"
+    source_urls:
+      serve: https://nvidia.github.io/TensorRT-LLM/commands/trtllm-serve.html
+      bench: https://nvidia.github.io/TensorRT-LLM/legacy/performance/perf-benchmarking.html
+    source_type: official_docs
+    volatility: medium
+    refresh_before: pre_benchmark_chapter
+    used_by_example: []
+    body_claim_allowed: true
+    metrics:
+      - throughput
+      - "p50/p90/p95/p99 latency"
+      - "input/output token percentiles"
+    controls:
+      - synthetic dataset preparation
+      - "input/output token distributions"
+    caveats:
+      - "TRT-LLM compile step changes results; compile config must be documented"

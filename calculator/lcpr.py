@@ -1,5 +1,5 @@
-# ABOUTME: Core LCPR (Loaded Cost Per Request) calculation engine.
-# ABOUTME: Computes true cost per successful request across deployment modes.
+# ABOUTME: Core LCPR (Loaded Cost Per Result) calculation engine.
+# ABOUTME: Computes true cost per successful result across deployment modes.
 
 from __future__ import annotations
 
@@ -410,6 +410,289 @@ def load_provider_pricing(yaml_path: Path) -> list[ProviderPricing]:
             )
 
     return providers
+
+
+@dataclass(frozen=True)
+class GoodputRequest:
+    """A single request's metrics for goodput analysis."""
+
+    ttft_ms: float  # time to first token in milliseconds
+    tpot_ms: float  # time per output token in milliseconds
+    output_tokens: int  # output tokens generated
+    quality_pass: bool  # whether the output passed the quality gate
+    cost: float  # total cost for this request
+
+
+@dataclass(frozen=True)
+class GoodputResult:
+    """Result of a goodput frontier test."""
+
+    total_requests: int
+    accepted_requests: int  # requests meeting ALL gates (latency + quality)
+    goodput_rate: float  # accepted requests per second
+    cost_per_accepted: float  # total cost / accepted requests
+    total_cost: float
+    ttft_p99_ms: float
+    tpot_p99_ms: float
+    quality_pass_rate: float
+    latency_pass_rate: float  # fraction meeting latency SLOs
+
+
+def compute_goodput(
+    requests: list[GoodputRequest],
+    duration_seconds: float,
+    ttft_slo_ms: float,
+    tpot_slo_ms: float,
+) -> GoodputResult:
+    """Compute goodput from per-request metrics.
+
+    Goodput = count(requests meeting ALL gates) / duration.
+    Cost per accepted = sum(ALL costs) / count(accepted requests).
+    Derivation 5 formula.
+    """
+    if not requests:
+        raise ValueError("requests must not be empty")
+    if duration_seconds <= 0:
+        raise ValueError("duration_seconds must be > 0")
+
+    total = len(requests)
+    total_cost = sum(r.cost for r in requests)
+
+    # Latency + quality gates
+    accepted = [
+        r for r in requests
+        if r.ttft_ms <= ttft_slo_ms
+        and r.tpot_ms <= tpot_slo_ms
+        and r.quality_pass
+    ]
+    latency_passing = [
+        r for r in requests
+        if r.ttft_ms <= ttft_slo_ms and r.tpot_ms <= tpot_slo_ms
+    ]
+    quality_passing = [r for r in requests if r.quality_pass]
+
+    n_accepted = len(accepted)
+    if n_accepted == 0:
+        return GoodputResult(
+            total_requests=total,
+            accepted_requests=0,
+            goodput_rate=0.0,
+            cost_per_accepted=float("inf"),
+            total_cost=total_cost,
+            ttft_p99_ms=_percentile([r.ttft_ms for r in requests], 0.99),
+            tpot_p99_ms=_percentile([r.tpot_ms for r in requests], 0.99),
+            quality_pass_rate=len(quality_passing) / total,
+            latency_pass_rate=len(latency_passing) / total,
+        )
+
+    return GoodputResult(
+        total_requests=total,
+        accepted_requests=n_accepted,
+        goodput_rate=n_accepted / duration_seconds,
+        cost_per_accepted=total_cost / n_accepted,
+        total_cost=total_cost,
+        ttft_p99_ms=_percentile([r.ttft_ms for r in requests], 0.99),
+        tpot_p99_ms=_percentile([r.tpot_ms for r in requests], 0.99),
+        quality_pass_rate=len(quality_passing) / total,
+        latency_pass_rate=len(latency_passing) / total,
+    )
+
+
+def _percentile(values: list[float], p: float) -> float:
+    """Compute the p-th percentile of a list of values."""
+    if not values:
+        return 0.0
+    sorted_vals = sorted(values)
+    idx = p * (len(sorted_vals) - 1)
+    lower = int(idx)
+    upper = min(lower + 1, len(sorted_vals) - 1)
+    frac = idx - lower
+    return sorted_vals[lower] * (1 - frac) + sorted_vals[upper] * frac
+
+
+@dataclass(frozen=True)
+class TraceToMarginResult:
+    """Result of a trace-to-margin reconciliation (Derivation 6)."""
+
+    trace_cost: float  # C_trace
+    invoice_amount: float  # C_invoice
+    delta: float  # invoice - trace
+    eval_cost: float
+    human_cost: float
+    ops_cost: float
+    total_loaded_cost: float  # numerator of LCPR
+    accepted_units: int
+    lcpr: float  # total_loaded_cost / accepted_units
+    revenue: float
+    gross_margin: float  # revenue - total_loaded_cost
+    gross_margin_pct: float  # gross_margin / revenue
+    naive_cost_per_unit: float  # trace_cost / total_attempts
+    lcpr_to_naive_ratio: float  # lcpr / naive_cost_per_unit
+
+
+def compute_trace_to_margin(
+    trace_cost: float,
+    invoice_amount: float,
+    eval_cost: float,
+    human_cost: float,
+    ops_cost: float,
+    total_attempts: int,
+    accepted_units: int,
+    revenue_per_unit: float,
+) -> TraceToMarginResult:
+    """Compute trace-to-margin reconciliation.
+
+    LCPR = (C_trace + delta + eval + human + ops) / accepted_units
+    Derivation 6 formula.
+    """
+    if accepted_units <= 0:
+        raise ValueError("accepted_units must be > 0")
+    if total_attempts <= 0:
+        raise ValueError("total_attempts must be > 0")
+
+    delta = invoice_amount - trace_cost
+    total_loaded = trace_cost + delta + eval_cost + human_cost + ops_cost
+    lcpr = total_loaded / accepted_units
+    revenue = revenue_per_unit * accepted_units
+    gross_margin = revenue - total_loaded
+    gross_margin_pct = gross_margin / revenue if revenue > 0 else 0.0
+    naive = trace_cost / total_attempts
+
+    return TraceToMarginResult(
+        trace_cost=trace_cost,
+        invoice_amount=invoice_amount,
+        delta=delta,
+        eval_cost=eval_cost,
+        human_cost=human_cost,
+        ops_cost=ops_cost,
+        total_loaded_cost=total_loaded,
+        accepted_units=accepted_units,
+        lcpr=lcpr,
+        revenue=revenue,
+        gross_margin=gross_margin,
+        gross_margin_pct=gross_margin_pct,
+        naive_cost_per_unit=naive,
+        lcpr_to_naive_ratio=lcpr / naive if naive > 0 else float("inf"),
+    )
+
+
+@dataclass(frozen=True)
+class KVSizingResult:
+    """Result of a KV cache sizing analysis (Derivation 2)."""
+
+    kv_bytes_per_token: float          # bytes per token per sequence
+    max_live_sequences: int            # at given context length
+    total_kv_memory_per_seq: float     # kv_bytes_per_token * resident_tokens
+    context_length_at_weight_parity: int  # where KV for one seq = weight memory (0 if not provided)
+
+
+def compute_kv_sizing(
+    n_layers: int,
+    n_kv_heads: int,
+    head_dim: int,
+    element_bytes: int,
+    kv_pool_bytes: float,
+    resident_tokens: int,
+    headroom_fraction: float = 0.1,
+    weight_bytes: float = 0.0,
+) -> KVSizingResult:
+    """Compute KV cache memory sizing for a transformer model.
+
+    KV bytes per token = 2 * n_layers * n_kv_heads * head_dim * element_bytes
+    Max live sequences = floor(usable_pool / (kv_bytes_per_token * resident_tokens))
+    Derivation 2 formula.
+    """
+    if n_layers <= 0:
+        raise ValueError("n_layers must be > 0")
+    if n_kv_heads <= 0:
+        raise ValueError("n_kv_heads must be > 0")
+    if kv_pool_bytes <= 0:
+        raise ValueError("kv_pool_bytes must be > 0")
+
+    kv_bytes_per_token = 2 * n_layers * n_kv_heads * head_dim * element_bytes
+    total_kv_memory_per_seq = kv_bytes_per_token * resident_tokens
+    usable_pool = kv_pool_bytes * (1 - headroom_fraction)
+
+    if total_kv_memory_per_seq > 0:
+        max_live_sequences = int(usable_pool // total_kv_memory_per_seq)
+    else:
+        max_live_sequences = 0
+
+    if weight_bytes > 0 and kv_bytes_per_token > 0:
+        context_length_at_weight_parity = int(weight_bytes / kv_bytes_per_token)
+    else:
+        context_length_at_weight_parity = 0
+
+    return KVSizingResult(
+        kv_bytes_per_token=kv_bytes_per_token,
+        max_live_sequences=max_live_sequences,
+        total_kv_memory_per_seq=total_kv_memory_per_seq,
+        context_length_at_weight_parity=context_length_at_weight_parity,
+    )
+
+
+@dataclass(frozen=True)
+class CacheBreakEvenResult:
+    """Result of a cache break-even analysis (Derivation 3)."""
+
+    prefix_tokens: int
+    write_price_per_token: float      # per-token (not per-M)
+    read_price_per_token: float       # per-token
+    uncached_price_per_token: float   # per-token
+    break_even_requests: float        # N where caching becomes cheaper (can be float)
+    savings_at_n: dict[int, float]    # savings in USD at various N values
+    storage_cost: float               # total storage cost for the retention period
+
+
+def compute_cache_break_even(
+    prefix_tokens: int,
+    uncached_input_price_per_m: float,
+    cache_write_price_per_m: float,
+    cache_read_price_per_m: float,
+    storage_price_per_m_hour: float = 0.0,
+    storage_hours: float = 0.0,
+) -> CacheBreakEvenResult:
+    """Compute cache break-even point for prompt caching.
+
+    N_break_even = (p_write - p_read + H * p_storage) / (p_in - p_read)
+    Derivation 3 formula.
+    """
+    if prefix_tokens < 0:
+        raise ValueError("prefix_tokens must be >= 0")
+
+    # Convert per-million prices to per-token prices
+    p_in = uncached_input_price_per_m / 1_000_000
+    p_write = cache_write_price_per_m / 1_000_000
+    p_read = cache_read_price_per_m / 1_000_000
+    p_storage = storage_price_per_m_hour / 1_000_000
+
+    # Storage cost for the retention period (per token)
+    storage_cost_per_token = p_storage * storage_hours
+    storage_cost = storage_cost_per_token * prefix_tokens
+
+    # Break-even formula: N = (p_write - p_read + H*p_storage) / (p_in - p_read)
+    denominator = p_in - p_read
+    if denominator == 0:
+        break_even_requests = float("inf")
+    else:
+        break_even_requests = (p_write - p_read + storage_cost_per_token) / denominator
+
+    # Compute savings at various N values
+    savings_at_n: dict[int, float] = {}
+    for n in (1, 5, 10, 100):
+        c_no_cache = prefix_tokens * n * p_in
+        c_cache = prefix_tokens * (1 * p_write + (n - 1) * p_read) + storage_cost
+        savings_at_n[n] = c_no_cache - c_cache
+
+    return CacheBreakEvenResult(
+        prefix_tokens=prefix_tokens,
+        write_price_per_token=p_write,
+        read_price_per_token=p_read,
+        uncached_price_per_token=p_in,
+        break_even_requests=break_even_requests,
+        savings_at_n=savings_at_n,
+        storage_cost=storage_cost,
+    )
 
 
 class LCPRCalculator:

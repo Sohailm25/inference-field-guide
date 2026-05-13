@@ -1166,11 +1166,11 @@ class TestPricingFreshness:
         )
 
     def test_lambda_h100_hourly_rate(self, providers):
-        """[PUBLIC_PRICING] lambda.ai/pricing — verified 2026-05-12.
-        H100 SXM 80GB on-demand is $3.99/hr (8-GPU config)."""
+        """[PUBLIC] lambda.ai/pricing — verified 2026-05-13.
+        H100 SXM 80GB on-demand is $4.29/hr (1x GPU)."""
         lambda_gpu = self._find(providers, "Lambda")
-        assert lambda_gpu.gpu_hourly_rate == pytest.approx(3.99), (
-            f"Lambda H100 should be $3.99/hr, got ${lambda_gpu.gpu_hourly_rate}"
+        assert lambda_gpu.gpu_hourly_rate == pytest.approx(4.29), (
+            f"Lambda H100 should be $4.29/hr, got ${lambda_gpu.gpu_hourly_rate}"
         )
 
 

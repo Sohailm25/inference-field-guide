@@ -1,0 +1,69 @@
+# ABOUTME: Workload identity for the benchmark audit worked example.
+# ABOUTME: Defines the RAG answer-drafting workload being benchmarked.
+
+workload_id: support-rag-answer-drafting
+workload_class: rag_answer_drafting
+description: >
+  RAG-powered answer drafting for customer support. Same workload class as the
+  trace-to-margin example, but here used as the subject of a benchmark comparison
+  between two serving routes.
+
+accepted_work_unit:
+  name: "accepted RAG answer under SLO"
+  definition: >
+    One answer that: (1) meets TTFT and E2E SLO at p99, (2) passes quality eval
+    with score >= 0.85, (3) does not require retry or fallback in the accepted path.
+  quality_floor: 0.85
+
+slo:
+  class: interactive
+  ttft_slo_ms: 800
+  tpot_slo_ms: 50
+  e2e_slo_ms: 5000
+  percentile: p99
+  streaming: true
+
+demand_shape:
+  peak_rps: 50
+  median_rps: 15
+  concurrency_range: [4, 8, 16, 32, 64]  # benchmark sweep
+  arrival_process: poisson  # correct methodology
+
+input_characteristics:
+  input_token_distribution:
+    p50: 2000
+    p95: 4500
+    p99: 8000
+  output_token_distribution:
+    p50: 200
+    p95: 500
+    p99: 800
+  retrieval_context_tokens: 1500  # average from RAG retrieval
+  system_prompt_tokens: 500
+  conversation_history_tokens: 200  # average
+
+cache_characteristics:
+  system_prompt_cacheable: true
+  retrieval_context_cacheable: false  # varies per query
+  expected_cache_hit_rate: 0.30  # system prompt only for cold benchmark
+  warm_cache_hit_rate: 0.65     # with prefix cache warmed
+
+benchmark_requirements:
+  methodology_source: "MLPerf Inference Server scenario + vLLM goodput"
+  required_metrics:
+    - "TTFT p50/p95/p99"
+    - "TPOT p50/p95/p99"
+    - "E2E latency p50/p95/p99"
+    - "throughput (req/s)"
+    - "goodput (accepted req/s meeting all SLOs)"
+    - "eval pass rate"
+    - "error/timeout rate"
+    - "retry rate"
+    - "cost per accepted work unit"
+  required_controls:
+    - "input/output token distribution"
+    - "arrival process (Poisson, not closed-loop)"
+    - "concurrency sweep"
+    - "cache warm/cold protocol"
+    - "cold-start inclusion"
+    - "retry policy documentation"
