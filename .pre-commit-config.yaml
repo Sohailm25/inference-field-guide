@@ -1,0 +1,16 @@
+# ABOUTME: Local pre-commit checks for calculator code and worked examples.
+# ABOUTME: Uses the project virtualenv so hooks match the verified test commands.
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: .venv/bin/ruff check
+        language: system
+        types: [python]
+      - id: pytest-calculator
+        name: pytest calculator and examples
+        entry: .venv/bin/pytest -p no:cacheprovider calculator/tests examples/test_seeds.py
+        language: system
+        pass_filenames: false

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -16,29 +17,32 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from calculator.confidence import VALID_STATUSES, default_confidence
 from calculator.lcpr import (
     HOURS_PER_MONTH,
+    SECONDS_PER_MONTH,
     GoodputRequest,
     LCPRCalculator,
-    SECONDS_PER_MONTH,
     WorkloadProfile,
     compute_break_even,
+    compute_cache_break_even,
     compute_goodput,
+    compute_kv_sizing,
     compute_lcpr,
     compute_trace_to_margin,
-    load_provider_pricing,
 )
+from calculator.permalink import decode_profile, encode_profile
 from calculator.readiness import (
     MigrationFactor,
     compute_payback,
     compute_readiness,
     get_engineering_hours,
 )
-from calculator.confidence import VALID_STATUSES, default_confidence
-from calculator.permalink import decode_profile, encode_profile
-from calculator.workload_profiles import PROFILES, get_profile, list_profiles
+from calculator.view_registry import IMPLEMENTED_APP_TABS, registry_rows
+from calculator.workload_profiles import get_profile, list_profiles
 
 PRICING_PATH = Path(__file__).parent / "provider_pricing.yaml"
+SNAPSHOT_DIR = Path(__file__).parent.parent / "source-snapshots" / "2026-05-12"
 
 DEPLOYMENT_COLORS = {
     "closed_api": "#e74c3c",
@@ -494,7 +498,11 @@ VENDOR_RECOMMENDATIONS = {
     "Compliance / Regulation": [
         ("US Federal / FedRAMP", "AWS Bedrock Gov or Azure Gov", "Only viable options"),
         ("EU data residency", "Nebius Finland/France, Scaleway, Mistral", ""),
-        ("Healthcare / HIPAA", "Baseten (zero-retention default), Together or Fireworks with BAA", ""),
+        (
+            "Healthcare / HIPAA",
+            "Baseten (zero-retention default), Together or Fireworks with BAA",
+            "",
+        ),
         ("Finance + audit", "Baseten Writer reference or hyperscaler", ""),
     ],
     "Latency": [
@@ -933,14 +941,20 @@ def _tab_goodput() -> None:
     # Comparison chart
     chart_data = []
     for label, r in results.items():
-        chart_data.append({"Route": label, "Metric": "Cost/accepted ($)", "Value": r.cost_per_accepted})
+        chart_data.append({
+            "Route": label,
+            "Metric": "Cost/accepted ($)",
+            "Value": r.cost_per_accepted,
+        })
     for label, r in results.items():
         chart_data.append({"Route": label, "Metric": "Goodput (req/s)", "Value": r.goodput_rate})
 
     winner = min(results, key=lambda k: results[k].cost_per_accepted)
     loser = max(results, key=lambda k: results[k].cost_per_accepted)
     if results[winner].cost_per_accepted < results[loser].cost_per_accepted:
-        savings_pct = (1 - results[winner].cost_per_accepted / results[loser].cost_per_accepted) * 100
+        winner_cost = results[winner].cost_per_accepted
+        loser_cost = results[loser].cost_per_accepted
+        savings_pct = (1 - winner_cost / loser_cost) * 100
         st.success(
             f"**{winner}** wins on cost per accepted result "
             f"(${results[winner].cost_per_accepted:.4f} vs "
@@ -1086,6 +1100,402 @@ def _tab_trace_to_margin() -> None:
         st.metric("Margin %", f"{result.gross_margin_pct:.1%}")
 
 
+def _tab_cache_policy_gate() -> None:
+    """Cache break-even and savings view."""
+    st.subheader("Cache Policy Gate")
+    st.caption(
+        "Modeled cache economics. Replace defaults with measured prefix size, TTL, "
+        "and provider cache prices before using this for a production decision."
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        prefix_tokens = st.number_input(
+            "Cacheable prefix tokens", 0, 1_000_000, 50_000, step=1_000,
+        )
+        uncached_price = st.number_input(
+            "Uncached input price ($/M)", 0.0, 100.0, 3.00, step=0.10,
+            format="%.2f",
+        )
+    with col2:
+        write_price = st.number_input(
+            "Cache write price ($/M)", 0.0, 100.0, 3.75, step=0.10,
+            format="%.2f",
+        )
+        read_price = st.number_input(
+            "Cache read price ($/M)", 0.0, 100.0, 0.30, step=0.05,
+            format="%.2f",
+        )
+    with col3:
+        storage_price = st.number_input(
+            "Storage price ($/M-hour)", 0.0, 100.0, 0.0, step=0.01,
+            format="%.2f",
+        )
+        storage_hours = st.number_input(
+            "Retention hours", 0.0, 720.0, 0.0, step=0.25,
+            format="%.2f",
+        )
+
+    result = compute_cache_break_even(
+        prefix_tokens=int(prefix_tokens),
+        uncached_input_price_per_m=float(uncached_price),
+        cache_write_price_per_m=float(write_price),
+        cache_read_price_per_m=float(read_price),
+        storage_price_per_m_hour=float(storage_price),
+        storage_hours=float(storage_hours),
+    )
+
+    st.markdown("#### Result")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if result.break_even_requests == float("inf"):
+            st.metric("Break-even reuse", "Never")
+        else:
+            st.metric("Break-even reuse", f"{result.break_even_requests:.2f} requests")
+    with col2:
+        st.metric("Storage cost", f"${result.storage_cost:.4f}")
+    with col3:
+        st.metric("Savings at 10 uses", f"${result.savings_at_n[10]:.4f}")
+
+    rows = [
+        {"Reuse count": n, "Savings vs uncached": f"${savings:.4f}"}
+        for n, savings in result.savings_at_n.items()
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
+def _tab_kv_capacity() -> None:
+    """KV cache memory sizing view."""
+    st.subheader("KV Capacity Envelope")
+    st.caption(
+        "Derived architecture math. It estimates KV memory capacity, not provider "
+        "queueing, scheduler behavior, or guaranteed concurrency."
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        n_layers = st.number_input("Layers", 1, 256, 80, step=1)
+        n_kv_heads = st.number_input("KV heads", 1, 256, 8, step=1)
+    with col2:
+        head_dim = st.number_input("Head dimension", 1, 1024, 128, step=8)
+        element_bytes = st.selectbox("KV dtype bytes", [1, 2, 4], index=1)
+    with col3:
+        kv_pool_gb = st.number_input("KV pool (GB)", 0.1, 1024.0, 40.0, step=1.0)
+        resident_tokens = st.number_input(
+            "Resident tokens / sequence", 1, 1_000_000, 4096, step=1024,
+        )
+    with col4:
+        headroom = st.slider("Headroom", 0.0, 0.50, 0.10, step=0.05)
+        weight_gb = st.number_input("Weight memory (GB, optional)", 0.0, 2048.0, 140.0, step=1.0)
+
+    result = compute_kv_sizing(
+        n_layers=int(n_layers),
+        n_kv_heads=int(n_kv_heads),
+        head_dim=int(head_dim),
+        element_bytes=int(element_bytes),
+        kv_pool_bytes=float(kv_pool_gb) * 1_000_000_000,
+        resident_tokens=int(resident_tokens),
+        headroom_fraction=float(headroom),
+        weight_bytes=float(weight_gb) * 1_000_000_000,
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("KV bytes/token", f"{result.kv_bytes_per_token:,.0f}")
+    with col2:
+        st.metric("KV per sequence", f"{result.total_kv_memory_per_seq / 1e9:.2f} GB")
+    with col3:
+        st.metric("Max live sequences", f"{result.max_live_sequences:,}")
+    with col4:
+        if result.context_length_at_weight_parity:
+            st.metric("Weight parity context", f"{result.context_length_at_weight_parity:,}")
+        else:
+            st.metric("Weight parity context", "N/A")
+
+
+def _tab_routefit_matrix() -> None:
+    """Template view for workload-route feasibility decisions."""
+    st.subheader("RouteFit Matrix")
+    st.caption(
+        "Template view. It records route feasibility and evidence quality; it does "
+        "not claim a route is production-ready without measured or modeled inputs."
+    )
+
+    default_rows = [
+        {
+            "Workload": "support-chat",
+            "Route": "closed-api",
+            "Feasibility": "pass",
+            "Evidence": "measured",
+            "LCPR": 0.234,
+            "Blocker": "",
+        },
+        {
+            "Workload": "support-chat",
+            "Route": "serverless-open",
+            "Feasibility": "measure",
+            "Evidence": "estimated",
+            "LCPR": 0.168,
+            "Blocker": "quality gate not measured",
+        },
+        {
+            "Workload": "coding-agent",
+            "Route": "batch-api",
+            "Feasibility": "pass",
+            "Evidence": "modeled",
+            "LCPR": 0.047,
+            "Blocker": "",
+        },
+    ]
+    rows = st.data_editor(default_rows, use_container_width=True, num_rows="dynamic")
+
+    candidates = [
+        row for row in rows
+        if row.get("Feasibility") == "pass"
+        and row.get("Evidence") in {"measured", "modeled"}
+        and row.get("LCPR") is not None
+    ]
+    if not candidates:
+        st.warning("No passable route has measured or modeled LCPR evidence.")
+        return
+
+    winner = min(candidates, key=lambda row: float(row["LCPR"]))
+    st.success(
+        "Current lowest-evidence-qualified route: "
+        f"{winner['Workload']} -> {winner['Route']} at ${float(winner['LCPR']):.4f} LCPR."
+    )
+
+
+REQUIRED_TRACE_FIELDS = (
+    "request_id",
+    "workload_id",
+    "route",
+    "input_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "output_tokens",
+    "trace_cost",
+    "quality_pass",
+    "latency_pass",
+    "accepted_work_unit",
+)
+
+
+def _tab_trace_event_schema() -> None:
+    """Trace schema template and local validator."""
+    st.subheader("Trace Event Schema")
+    st.caption(
+        "Template view. Paste a representative event to check whether it carries "
+        "the fields needed for LCPR and trace-to-margin reconciliation."
+    )
+
+    sample = {
+        "request_id": "req_001",
+        "workload_id": "support-chat-v2",
+        "route": "anthropic/sonnet",
+        "input_tokens": 2800,
+        "cache_creation_input_tokens": 1800,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 350,
+        "trace_cost": 0.142,
+        "quality_pass": True,
+        "latency_pass": True,
+        "accepted_work_unit": "accepted_resolution",
+    }
+    raw = st.text_area("Trace event JSON", value=json.dumps(sample, indent=2), height=300)
+
+    try:
+        event = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        st.error(f"Invalid JSON: {exc}")
+        return
+
+    missing = [field for field in REQUIRED_TRACE_FIELDS if field not in event]
+    rows = [
+        {
+            "Field": field,
+            "Present": field in event,
+            "Value": event.get(field, ""),
+        }
+        for field in REQUIRED_TRACE_FIELDS
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    if missing:
+        st.warning(f"Missing fields: {', '.join(missing)}")
+    else:
+        st.success("Trace event has the required LCPR fields.")
+
+
+def _flatten_pricing_rows(pricing_data: dict) -> list[dict[str, object]]:
+    """Flatten provider pricing YAML into display rows."""
+    rows: list[dict[str, object]] = []
+    for group_name in ("closed_apis", "serverless_open"):
+        for provider_data in pricing_data.get(group_name, {}).values():
+            provider = provider_data.get("name", "unknown")
+            for model_data in provider_data.get("models", {}).values():
+                rows.append({
+                    "Provider": provider,
+                    "Model": model_data.get("name", "unknown"),
+                    "Mode": group_name,
+                    "Input $/M": model_data.get("input_rate"),
+                    "Output $/M": model_data.get("output_rate"),
+                    "Cached $/M": model_data.get("cached_input_rate"),
+                    "Evidence": "public" if "[PUBLIC" in str(model_data) else "modeled",
+                })
+    for provider_data in pricing_data.get("dedicated_gpu", {}).values():
+        provider = provider_data.get("name", "unknown")
+        for gpu_data in provider_data.get("gpus", {}).values():
+            rows.append({
+                "Provider": provider,
+                "Model": gpu_data.get("name", "unknown"),
+                "Mode": "dedicated_gpu",
+                "Input $/M": None,
+                "Output $/M": None,
+                "Cached $/M": None,
+                "Evidence": "public" if "[PUBLIC" in str(gpu_data) else "modeled",
+            })
+    return rows
+
+
+def _tab_source_snapshot_browser() -> None:
+    """Pricing/source snapshot browser."""
+    st.subheader("Source Snapshot Browser")
+    st.caption(
+        "Displays the local pricing snapshot and flags rows with missing required "
+        "pricing fields. Use it as an audit surface, not a live price refresh."
+    )
+
+    pricing_data = yaml.safe_load(PRICING_PATH.read_text()) or {}
+    rows = _flatten_pricing_rows(pricing_data)
+    for row in rows:
+        needs_token_prices = row["Mode"] != "dedicated_gpu"
+        missing = needs_token_prices and (
+            row["Input $/M"] is None or row["Output $/M"] is None
+        )
+        row["Status"] = "incomplete" if missing else "usable"
+
+    st.markdown(f"**Pricing file:** `{PRICING_PATH.name}`")
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    snapshot_files = (
+        sorted(p.name for p in SNAPSHOT_DIR.glob("*.yaml"))
+        if SNAPSHOT_DIR.exists()
+        else []
+    )
+    st.markdown("#### Source snapshot files")
+    if snapshot_files:
+        st.write(", ".join(snapshot_files))
+    else:
+        st.warning(f"No source snapshot directory found at {SNAPSHOT_DIR}.")
+
+    st.markdown("#### View registry")
+    st.dataframe(registry_rows(), use_container_width=True, hide_index=True)
+
+
+def _tab_operating_views() -> None:
+    """Grouped finance, ops, latency, usage, and compliance templates."""
+    st.subheader("Operating Views")
+    st.caption(
+        "Template views for operating review. These are user-input calculators, "
+        "not automated billing, telemetry, or compliance integrations."
+    )
+
+    tabs = st.tabs([
+        "Spend Movement",
+        "Commitment",
+        "Variance",
+        "Account Margin",
+        "Usage Signals",
+        "Security",
+        "Latency",
+    ])
+
+    with tabs[0]:
+        baseline = st.number_input("Baseline monthly spend ($)", 0.0, 10_000_000.0, 100_000.0)
+        volume_delta = st.slider("Volume delta", -1.0, 2.0, 0.05, step=0.01)
+        price_delta = st.slider("Unit price delta", -1.0, 2.0, -0.18, step=0.01)
+        mix_delta = st.slider("Mix/cache/quality delta", -1.0, 2.0, 0.10, step=0.01)
+        forecast = baseline * (1 + volume_delta) * (1 + price_delta) * (1 + mix_delta)
+        st.metric("Forecast spend", f"${forecast:,.0f}", delta=f"${forecast - baseline:,.0f}")
+
+    with tabs[1]:
+        committed_hours = st.number_input("Committed GPU hours/month", 0.0, 100_000.0, 720.0)
+        used_hours = st.number_input("Used GPU hours/month", 0.0, 100_000.0, 430.0)
+        hourly_rate = st.number_input("Committed hourly rate ($)", 0.0, 1000.0, 4.00)
+        utilization = used_hours / committed_hours if committed_hours else 0.0
+        idle_cost = max(committed_hours - used_hours, 0.0) * hourly_rate
+        st.metric("Commitment utilization", f"{utilization:.1%}")
+        st.metric("Idle committed cost", f"${idle_cost:,.0f}")
+
+    with tabs[2]:
+        expected = st.number_input("Expected monthly loaded cost ($)", 0.0, 10_000_000.0, 100_000.0)
+        actual = st.number_input("Actual monthly loaded cost ($)", 0.0, 10_000_000.0, 118_000.0)
+        threshold = st.slider("Investigation threshold", 0.0, 1.0, 0.05, step=0.01)
+        variance = (actual - expected) / expected if expected else 0.0
+        st.metric("Variance", f"{variance:.1%}", delta=f"${actual - expected:,.0f}")
+        if abs(variance) >= threshold:
+            st.warning("Variance exceeds the investigation threshold.")
+        else:
+            st.success("Variance is within threshold.")
+
+    with tabs[3]:
+        revenue = st.number_input("Account revenue ($)", 0.0, 100_000_000.0, 45_000.0)
+        loaded_cost = st.number_input("Loaded inference cost ($)", 0.0, 100_000_000.0, 19_150.0)
+        margin = revenue - loaded_cost
+        margin_pct = margin / revenue if revenue else 0.0
+        st.metric("Gross margin", f"${margin:,.0f}")
+        st.metric("Gross margin %", f"{margin_pct:.1%}")
+
+    with tabs[4]:
+        requests = st.number_input("Requests", 0, 100_000_000, 100_000)
+        accepted = st.number_input("Accepted work units", 0, 100_000_000, 82_000)
+        cache_hit = st.slider("Cache hit rate", 0.0, 1.0, 0.35, step=0.01)
+        retry = st.slider("Retry rate", 0.0, 1.0, 0.03, step=0.01)
+        acceptance = accepted / requests if requests else 0.0
+        st.dataframe(
+            [
+                {"Signal": "Acceptance rate", "Value": f"{acceptance:.1%}"},
+                {"Signal": "Cache hit rate", "Value": f"{cache_hit:.1%}"},
+                {"Signal": "Retry rate", "Value": f"{retry:.1%}"},
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    with tabs[5]:
+        data_residency = st.checkbox("Data residency required", value=True)
+        zero_retention = st.checkbox("Zero data retention required", value=True)
+        baa_required = st.checkbox("BAA or regulated-data agreement required", value=False)
+        public_batch_ok = st.checkbox("Public batch endpoint allowed", value=False)
+        blockers = []
+        if data_residency:
+            blockers.append("verify region and routing controls")
+        if zero_retention:
+            blockers.append("verify retention setting in contract/API")
+        if baa_required:
+            blockers.append("verify BAA or equivalent agreement")
+        if not public_batch_ok:
+            blockers.append("exclude public batch routes for restricted data")
+        st.dataframe(
+            [{"Constraint": blocker, "Status": "must verify"} for blocker in blockers],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    with tabs[6]:
+        network_ms = st.number_input("Network + app overhead (ms)", 0, 10_000, 250)
+        ttft_ms = st.number_input("TTFT (ms)", 0, 10_000, 500)
+        decode_ms = st.number_input("Decode time (ms)", 0, 60_000, 1200)
+        tool_ms = st.number_input("Tool/retrieval time (ms)", 0, 60_000, 600)
+        slo_ms = st.number_input("End-to-end SLO (ms)", 1, 120_000, 5000)
+        total_ms = network_ms + ttft_ms + decode_ms + tool_ms
+        st.metric("End-to-end latency", f"{total_ms:,} ms")
+        if total_ms <= slo_ms:
+            st.success("Latency model is within SLO.")
+        else:
+            st.warning("Latency model exceeds SLO.")
+
+
 def main() -> None:
     st.set_page_config(
         page_title="Inference Field Guide Calculator",
@@ -1141,13 +1551,16 @@ def main() -> None:
     # If permalink loaded, override sidebar profile (sidebar defaults win on next interaction)
     if _permalink_profile is not None and "config" in st.query_params:
         profile = _permalink_profile
-        profile_name = "shared"
 
     # Share button
     st.sidebar.markdown("---")
     _encoded = encode_profile(profile)
     _share_url = f"https://inference-field-guide.streamlit.app/?config={_encoded}"
-    st.sidebar.text_input("Share this config", value=_share_url, help="Copy this URL to share your current workload profile.")
+    st.sidebar.text_input(
+        "Share this config",
+        value=_share_url,
+        help="Copy this URL to share your current workload profile.",
+    )
 
     # Assumption confidence tracker
     _confidence = default_confidence()
@@ -1199,30 +1612,34 @@ def main() -> None:
             })
         st.table(rows)
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "LCPR Comparison",
-        "Sensitivity Analysis",
-        "Break-Even Analysis",
-        "Migration Readiness",
-        "Decision Trees",
-        "Goodput Frontier",
-        "Trace-to-Margin",
-    ])
+    tabs = st.tabs(IMPLEMENTED_APP_TABS)
 
-    with tab1:
+    with tabs[0]:
         _tab_comparison(calc, profile)
-    with tab2:
+    with tabs[1]:
         _tab_sensitivity(calc, profile)
-    with tab3:
+    with tabs[2]:
         _tab_breakeven(calc)
-    with tab4:
+    with tabs[3]:
         _tab_readiness(calc, profile)
-    with tab5:
+    with tabs[4]:
         _tab_decision_trees()
-    with tab6:
+    with tabs[5]:
         _tab_goodput()
-    with tab7:
+    with tabs[6]:
         _tab_trace_to_margin()
+    with tabs[7]:
+        _tab_cache_policy_gate()
+    with tabs[8]:
+        _tab_kv_capacity()
+    with tabs[9]:
+        _tab_routefit_matrix()
+    with tabs[10]:
+        _tab_trace_event_schema()
+    with tabs[11]:
+        _tab_source_snapshot_browser()
+    with tabs[12]:
+        _tab_operating_views()
 
 
 if __name__ == "__main__":
