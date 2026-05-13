@@ -1,5 +1,5 @@
 # ABOUTME: Core LCPR (Loaded Cost Per Result) calculation engine.
-# ABOUTME: Computes true cost per successful result across deployment modes.
+# ABOUTME: Computes profile estimates and trace reconciliation for deployment choices.
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ SECONDS_PER_MONTH = SECONDS_PER_DAY * DAYS_PER_MONTH  # 2_592_000
 
 @dataclass(frozen=True)
 class WorkloadProfile:
-    """Describes a workload's characteristics for LCPR calculation."""
+    """Describes workload assumptions for profile-estimated LCPR."""
 
     avg_input_tokens: int
     avg_output_tokens: int
@@ -90,12 +90,12 @@ class ProviderPricing:
 
 @dataclass(frozen=True)
 class LCPRResult:
-    """Result of an LCPR calculation for one provider."""
+    """Result of a profile-estimated LCPR calculation for one provider."""
 
     provider_name: str
     deployment_mode: str
-    lcpr: float  # $ per successful request
-    cost_per_1k_requests: float  # $ per 1,000 successful requests
+    lcpr: float  # $ per accepted work unit
+    cost_per_1k_requests: float  # $ per 1,000 accepted work units
     monthly_cost: float  # total monthly cost
 
 
@@ -117,18 +117,23 @@ class BreakEvenResult:
 
 
 def compute_lcpr(profile: WorkloadProfile, pricing: ProviderPricing) -> LCPRResult:
-    """Compute LCPR for a workload on a given provider.
+    """Estimate LCPR for a workload on a given provider.
 
-    LCPR formula:
-        LCPR = (token_cost + retry_cost + repair_cost + engineering_cost)
-               / successful_requests
+    This is the comparison-view estimator, not the full trace-to-margin
+    reconciliation. It uses workload-profile assumptions to approximate:
+
+        estimated_LCPR = (token_cost + repair_cost + engineering_cost)
+                         / accepted_work_units
 
     Where:
         token_cost = (input_tokens * input_rate + output_tokens * output_rate) * total_attempts
-        retry_cost = retry_rate * base_token_cost (already in total_attempts)
+        retries are represented by increasing total_attempts
         repair_cost = failed_requests * repair_cost_per_failure
         engineering_cost = monthly engineering hours * hourly rate
-        successful_requests = monthly_requests * quality_gate_pass_rate
+        accepted_work_units = monthly_requests * quality_gate_pass_rate
+
+    Use compute_trace_to_margin when trace cost, invoice delta, eval cost,
+    human escalation, and ops allocation are available for the same period.
     """
     # Adjust quality gate for model quality score
     if pricing.quality_score <= 0:
@@ -180,12 +185,14 @@ def _compute_token_based_lcpr(profile: WorkloadProfile, pricing: ProviderPricing
     # Total monthly cost
     monthly_cost = total_token_cost + total_repair_cost + total_engineering_cost
 
-    # Successful requests
-    successful_requests = profile.monthly_requests * profile.quality_gate_pass_rate
-    if successful_requests == 0:
-        raise ValueError("quality_gate_pass_rate must be > 0: zero successful requests is undefined")
+    # Accepted work units under the profile's quality gate.
+    accepted_work_units = profile.monthly_requests * profile.quality_gate_pass_rate
+    if accepted_work_units == 0:
+        raise ValueError(
+            "quality_gate_pass_rate must be > 0: zero accepted work units is undefined"
+        )
 
-    lcpr = monthly_cost / successful_requests
+    lcpr = monthly_cost / accepted_work_units
 
     return LCPRResult(
         provider_name=pricing.name,
@@ -234,11 +241,14 @@ def _compute_dedicated_lcpr(profile: WorkloadProfile, pricing: ProviderPricing) 
 
     monthly_cost = total_gpu_cost + total_repair_cost + total_engineering_cost
 
-    successful_requests = profile.monthly_requests * profile.quality_gate_pass_rate
-    if successful_requests == 0:
-        raise ValueError("quality_gate_pass_rate must be > 0: zero successful requests is undefined")
+    # Accepted work units under the profile's quality gate.
+    accepted_work_units = profile.monthly_requests * profile.quality_gate_pass_rate
+    if accepted_work_units == 0:
+        raise ValueError(
+            "quality_gate_pass_rate must be > 0: zero accepted work units is undefined"
+        )
 
-    lcpr = monthly_cost / successful_requests
+    lcpr = monthly_cost / accepted_work_units
 
     return LCPRResult(
         provider_name=pricing.name,

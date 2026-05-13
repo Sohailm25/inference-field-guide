@@ -1,78 +1,77 @@
-# Inference Field Guide — Current State
+ABOUTME: Tracks current state for the Production Inference Economics calculator.
+ABOUTME: Summarizes implementation status, verification, and remaining risks.
 
-## Phase Status (as of 2026-05-12)
+# Production Inference Economics Calculator — Current State
 
-| Phase | Status | Notes |
-|-------|--------|-------|
-| Phase 0: Trust Blockers | COMPLETE (except 0a — skipped per user) | Pricing updated, break-even math fixed, formula/gate logic corrected. |
-| Phase 1: Calculator Hardening | COMPLETE | Constants extracted, input validation, YAML schema validation, prefill_efficiency docs, verifier rewritten |
-| Phase 2: Calculator Features | COMPLETE | Quality sensitivity (2a), hidden controls (2e), pricing panel (2c), permalink/shareable state (2b), assumption confidence tracker (2d) |
-| Phase 3: Calculator UI | DEFERRED | Loading spinners, accessibility — lower priority |
-| Phase 4: Essay Structure | COMPLETE | Disclosure moved, spec decode softened, "stay on APIs" section, quality risk, absolute claims fixed, compliance caveats |
-| Phase 5: Essay Analytics | COMPLETE | All items done: definition alignment, LCPR failure modes, assumption register, metering gap, math cards, fallback design, lead time, governance tiers, reconciliation, red-flag triggers, thresholds caveat, cost segmentation, attrition tax, systems delay, workload reference cards, diagnostic trees |
-| Phase 6: Audit + Recompute | COMPLETE | All 21 verifier claims PASS. All stale numbers updated. Evidence tags re-classified to 8-level taxonomy. Full test suite 191 passed. |
+## Status As Of 2026-05-13
 
-## Deployment Status (2026-05-12)
+The companion calculator is aligned to the book-facing view inventory in
+`calculator/view_registry.py`. The Streamlit app exposes 13 tabs directly and
+maps the 14 appendix views either to a direct tab or to a grouped template
+surface.
 
-### sohailmo.ai (Pelican / GitHub Pages)
-- **URL**: sohailmo.ai/inference-field-guide/
-- **Repo**: Sohailm25/Sohailm25.github.io (master branch)
-- **Deploy**: GitHub Actions — completed successfully
-- **Features**: Sticky sidebar TOC, mobile dropdown TOC, dark-themed tables, 4 pre-rendered decision tree SVGs
+The current second pass tightened consistency between the app, README, code
+comments, and appendix vocabulary:
 
-### Streamlit Calculator
-- **Repo**: github.com/Sohailm25/inference-field-guide (main branch)
-- **Main file**: calculator/app.py
-- **Requirements**: requirements-streamlit.txt
-- **Theme**: .streamlit/config.toml (dark theme matching sohailmo.ai)
-- **Status**: Code pushed, Streamlit Cloud deployment has auth redirect issue (0a — skipped)
-- **Target URL**: inference-field-guide.streamlit.app
+- App and README now use the book title: **Production Inference Economics: A
+  Field Guide**.
+- The main app explainer now uses the full LCPR reconciliation formula:
+  `C_trace + delta + C_eval + C_human + C_ops` over accepted work units.
+- The LCPR Comparison tab is explicitly labeled as a profile-based screening
+  estimator, not invoice-grade trace-to-margin reconciliation.
+- Trace-to-Margin is labeled as the reconciled path when traces, invoice,
+  eval, human, ops, and accepted work counts exist for the same period.
+- Break-Even Analysis is described as the Part 4 dedicated-capacity screening
+  gate, not a Part 1 formula.
+- Source Snapshot Browser no longer pretends PyYAML can infer `[PUBLIC]`
+  evidence tags from comments. Rows now show `comment_only` until source
+  metadata is promoted into structured YAML fields.
 
-### Streamlit App Tabs
-1. **LCPR Comparison**: Sidebar profile selector (5 presets + custom), comparison table with overhead ratios, Plotly bar chart color-coded by deployment mode
-2. **Sensitivity Analysis**: Parameter dropdown (retry_rate, quality_gate, I/O tokens, volume), range slider, multi-provider line chart
-3. **Break-Even Analysis**: Serverless vs dedicated selector, break-even metrics, cost-vs-volume chart with crossover annotation
-4. **Decision Trees**: 4 Mermaid diagrams in expanders with context text
+## Streamlit App Tabs
 
-### New Calculator Features (2026-05-12)
-- **Quality sensitivity**: `quality_score` field on ProviderPricing adjusts effective quality gate
-- **Exposed controls**: batch_eligible_fraction, prefill_efficiency, repair_cost in both custom and preset modes
-- **Pricing snapshot panel**: Collapsible expander showing all provider prices with verification dates and source URLs
-- **Permalink / shareable state**: base64-encoded WorkloadProfile in URL query params; share button in sidebar
-- **Assumption confidence tracker**: 6-level status per trackable field (assumed → contract_confirmed); progress bar in sidebar
+1. LCPR Comparison
+2. Sensitivity Analysis
+3. Break-Even Analysis
+4. Migration Readiness
+5. Decision Trees
+6. Goodput Frontier
+7. Trace-to-Margin
+8. Cache Policy Gate
+9. KV Capacity Envelope
+10. RouteFit Matrix
+11. Trace Event Schema
+12. Source Snapshot Browser
+13. Operating Views
 
-## Test Coverage
-- **191 tests** total across calculator/tests/
-- All passing (0.26s runtime)
-- Test classes include: TestQualityAdjustedLCPR, TestYAMLSchemaValidation, TestWorkloadProfileValidation, TestFormatFunctions, TestVerifyClaims, TestPermalink, TestAssumptionConfidence
+## View Inventory Notes
 
-## Essay Verification
-- **verify_essay.py**: Reads essay text, computes expected values from calculator, reports PASS/FAIL
-- **21 claims verified**: All PASS as of 2026-05-12
-- **Pricing sources**: All updated to May 2026 verified public prices
+- Book-facing **Dedicated Break-Even** maps to the app's **Break-Even
+  Analysis** tab.
+- Its internal schema name is **Dedicated Utilization Gate v1**, matching the
+  appendix and Part 4 derivation language.
+- Book-facing operating views such as Spend Movement, Commitment Utilization,
+  Variance Analysis, Account Margin Model, Usage Signals, Security and
+  Compliance Filter, and Latency Decomposition live inside the grouped
+  **Operating Views** tab.
 
-## Evidence Tag System (8-level taxonomy)
-| Tag | Count | Description |
-|-----|-------|-------------|
-| PUBLIC_PRICING | 10 | Vendor pricing pages with verified date |
-| PUBLIC_DOC | 9 | Vendor documentation or announcements |
-| MEASURED_PRIVATE | 0 | Author's production measurements (in legend only) |
-| CUSTOMER_STORY | 17 | Vendor-published case studies |
-| INDEPENDENT_BENCHMARK | 7 | Third-party benchmarks with methodology |
-| ANALYST_ESTIMATE | 6 | Third-party analysis or estimates |
-| MODELED | 21 | LCPR calculator output, reproducible |
-| UNVERIFIED | 0 | Claims needing primary source (in legend only) |
+## Verification
 
-## Key Numbers (May 2026)
-- OpenAI GPT-5.5: $5.00/$30.00/M input/output
-- Together DeepSeek V3: $0.60/$1.70/M input/output
-- Fireworks Llama 70B: $0.90/$0.90/M
-- DeepInfra GPT-OSS-120B: $0.039/$0.19/M
-- Lambda H100 SXM: $3.99/hr
+- `ruff check calculator/app.py calculator/lcpr.py calculator/cli.py calculator/__init__.py calculator/tests/test_lcpr.py calculator/tests/test_view_registry.py`
+  passed.
+- `pytest -p no:cacheprovider calculator/tests/test_view_registry.py calculator/tests/test_lcpr.py`
+  passed with 79 tests.
+- `pytest -p no:cacheprovider calculator/tests examples/test_seeds.py` passed
+  with 269 tests.
+- Streamlit app booted successfully on `http://localhost:8502` and returned
+  HTTP 200.
 
-## Remaining Work
-- **0a**: Fix Streamlit deployment (auth redirects) — skipped per user decision
-- **Phase 3**: Calculator UI improvements (loading spinners, accessibility) — deferred
+## Remaining Risks
 
-## Repo Location
-`/Users/sohailmo/inference-field-guide/` (standalone repo, separate from togetherai)
+- Provider prices are still snapshots, not live pricing. Do not imply current
+  market accuracy without a new source refresh.
+- Pricing evidence tags are still mostly human-readable YAML comments. The app
+  now avoids false precision, but structured `evidence`, `source_url`, and
+  `verified_at` fields should be added if the browser is meant to audit sources
+  programmatically.
+- Streamlit Cloud deployment previously had an auth redirect issue. This pass
+  verified local boot only.

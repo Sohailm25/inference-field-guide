@@ -78,7 +78,7 @@ VIEW_REGISTRY = (
     ),
     CalculatorView(
         public_name="Dedicated Break-Even",
-        internal_name="Dedicated Break-Even v1",
+        internal_name="Dedicated Utilization Gate v1",
         status="implemented_ui",
         evidence_mode="modeled",
         reference="Part 4 / Appendix View 14",

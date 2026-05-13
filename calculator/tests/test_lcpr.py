@@ -1,4 +1,4 @@
-# ABOUTME: Unit tests for the LCPR (Loaded Cost Per Request) calculation engine.
+# ABOUTME: Unit tests for the LCPR (Loaded Cost Per Result) calculation engine.
 # ABOUTME: Tests core formula, break-even analysis, sensitivity, edge cases, and pricing loading.
 
 import math
@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from calculator.lcpr import (
-    BreakEvenResult,
     LCPRCalculator,
     LCPRResult,
     ProviderPricing,
@@ -175,14 +174,14 @@ class TestComputeLCPR:
 
         assert with_eng_result.lcpr > no_eng_result.lcpr
 
-    def test_monthly_cost_is_lcpr_times_successful_requests(self, simple_profile, openai_pricing):
-        """Monthly cost should be consistent with LCPR × successful request count."""
+    def test_monthly_cost_is_lcpr_times_accepted_work_units(self, simple_profile, openai_pricing):
+        """Monthly cost should be consistent with LCPR × accepted work units."""
         result = compute_lcpr(simple_profile, openai_pricing)
 
         # Monthly cost = total cost of all requests (including retries, failures, engineering)
-        # LCPR = monthly_cost / successful_requests
-        successful = simple_profile.monthly_requests * simple_profile.quality_gate_pass_rate
-        expected_monthly = result.lcpr * successful
+        # LCPR = monthly_cost / accepted_work_units
+        accepted_units = simple_profile.monthly_requests * simple_profile.quality_gate_pass_rate
+        expected_monthly = result.lcpr * accepted_units
         assert math.isclose(result.monthly_cost, expected_monthly, rel_tol=1e-6)
 
 
@@ -1284,7 +1283,11 @@ class TestBreakEvenCapacityAware:
         )
         result = compute_break_even(serverless, dedicated)
         expected_capacity = 1500 * 0.40 * 86400
-        assert math.isclose(result.effective_capacity_tokens_per_day, expected_capacity, rel_tol=0.001)
+        assert math.isclose(
+            result.effective_capacity_tokens_per_day,
+            expected_capacity,
+            rel_tol=0.001,
+        )
 
 
 class TestQualityAdjustedLCPR:

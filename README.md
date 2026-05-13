@@ -1,8 +1,8 @@
-# Inference Field Guide
+# Production Inference Economics Calculator
 
 TCO frameworks, vendor evaluation, and architecture patterns for teams running inference in production.
 
-Companion to [The Honest Field Guide to Production Inference](https://sohailmo.ai/inference-field-guide/) and the [LCPR-2026 framework](https://sohailmo.ai/lcpr-calculator-v2/) from *Production Inference Economics*.
+Companion calculator for [Production Inference Economics: A Field Guide](https://sohailmo.ai/inference-field-guide/) and the [LCPR-2026 framework](https://sohailmo.ai/lcpr-calculator-v2/).
 
 ## LCPR Calculator v2
 

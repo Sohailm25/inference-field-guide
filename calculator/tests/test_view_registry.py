@@ -26,6 +26,10 @@ def test_appendix_views_are_registered():
     missing = set(APPENDIX_VIEW_NAMES) - public_names
     assert not missing
 
+    assert view_by_public_name("Dedicated Break-Even").internal_name == (
+        "Dedicated Utilization Gate v1"
+    )
+
 
 def test_example_seed_views_resolve_to_registry_entries():
     seed_paths = sorted(ROOT.glob("examples/*/calculator-seed.yaml"))
@@ -54,3 +58,31 @@ def test_readme_describes_current_example_scales():
     assert "1.65x" in readme
     assert "$0.172" in readme
     assert "12.1x" in readme
+
+
+def test_app_explains_full_lcpr_vs_profile_estimator():
+    app = (ROOT / "calculator" / "app.py").read_text()
+
+    assert "Loaded Cost Per Request" not in app
+    assert "successful_requests" not in app
+    assert "token\\_cost} + \\text{retry\\_cost}" not in app
+    assert r"C_{\text{trace}}" in app
+    assert "accepted work" in app
+    assert "profile estimator for screening providers" in app
+    assert "reconciled book formula" in app
+
+
+def test_app_has_no_stale_essay_or_wrong_part_references():
+    app = (ROOT / "calculator" / "app.py").read_text()
+
+    assert "Part 1 of the essay" not in app
+    assert "Decision trees from the essay" not in app
+    assert "Part 0 of the essay" not in app
+    assert "token-volume version of the dedicated break-even gate from Part 4" in app
+
+
+def test_source_snapshot_browser_does_not_infer_evidence_from_yaml_comments():
+    app = (ROOT / "calculator" / "app.py").read_text()
+
+    assert '"[PUBLIC" in str' not in app
+    assert "comment_only" in app

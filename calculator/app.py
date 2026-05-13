@@ -173,8 +173,11 @@ def _tab_comparison(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
     """Tab 1: LCPR comparison table and bar chart."""
     st.subheader("LCPR Comparison")
     st.markdown(
-        "Loaded Cost Per Result across all providers, ranked lowest to highest. "
-        "LCPR includes token cost, retries, repair, and engineering overhead."
+        "Profile-estimated Loaded Cost Per Result across providers, ranked "
+        "lowest to highest. This view uses sidebar workload assumptions, pricing "
+        "rows, retry rate, quality gate pass rate, repair cost, and engineering "
+        "overhead. Use Trace-to-Margin when you have traces and invoices and need "
+        "the full book formula with invoice delta, eval, human, and ops costs."
     )
 
     results = calc.compare(profile)
@@ -187,7 +190,7 @@ def _tab_comparison(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
         rows.append({
             "Provider": r.provider_name,
             "Mode": DEPLOYMENT_LABELS.get(r.deployment_mode, r.deployment_mode),
-            "Raw $/req": f"${raw_cost:.4f}",
+            "Raw $/attempt": f"${raw_cost:.4f}",
             "LCPR": f"${r.lcpr:.4f}",
             "Monthly": f"${r.monthly_cost:,.0f}",
             "Overhead": f"{overhead:.1f}x",
@@ -346,8 +349,10 @@ def _tab_breakeven(calc: LCPRCalculator) -> None:
     """Tab 3: Break-even analysis between serverless and dedicated."""
     st.subheader("Break-Even Analysis")
     st.markdown(
-        "Find the daily output token volume where dedicated GPU becomes "
-        "cheaper than serverless. Based on the formula in Part 1 of the essay."
+        "Screen the daily output token volume where a dedicated GPU becomes "
+        "cheaper than serverless at the stated utilization. This is the "
+        "token-volume version of the dedicated break-even gate from Part 4, not "
+        "a full migration payback model."
     )
 
     providers = calc.providers
@@ -512,7 +517,7 @@ VENDOR_RECOMMENDATIONS = {
     ],
     "Cost": [
         ("Minimize per-token", "DeepInfra", "10-30% below Together/Fireworks"),
-        ("Minimize LCPR", "Run the LCPR calculator (Tab 1) with your actual workload", ""),
+        ("Minimize LCPR", "Run the LCPR Comparison tab with your actual workload", ""),
         ("Need Multi-LoRA", "Fireworks Multi-LoRA", "$0.20/M for 8B base"),
     ],
     "Model flexibility": [
@@ -561,7 +566,7 @@ def _tab_decision_trees() -> None:
     """Tab 4: Decision tree diagrams."""
     st.subheader("Decision Frameworks")
     st.markdown(
-        "Decision trees from the essay. Click any heading below to expand. "
+        "Decision trees from the book. Click any heading below to expand. "
         "Use the **expand icon** (top-right of each diagram) to view full-size."
     )
 
@@ -664,8 +669,8 @@ def _tab_readiness(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
     st.subheader("Migration Readiness Assessment")
     st.markdown(
         "Score 6 factors to estimate migration complexity, timeline, "
-        "and engineering investment. Based on the polynomial complexity "
-        "model from Part 1 of the essay."
+        "and engineering investment. This is a readiness screen for the "
+        "migration gates in Part 4; it does not replace measured candidate LCPR."
     )
 
     # Section 1: Complexity Assessment
@@ -855,7 +860,13 @@ def _tab_goodput() -> None:
     st.markdown(
         "Compare two routes by cost per accepted result under SLO. "
         "A route with higher total cost can still win if it produces more "
-        "accepted work. Based on Derivation 5."
+        "accepted work. Goodput means requests that pass both latency and "
+        "quality gates per second. Based on Derivation 5."
+    )
+    st.caption(
+        "The sliders synthesize request rows from summary rates for quick "
+        "screening. For publication or migration decisions, replace them with "
+        "route-specific load test traces."
     )
 
     st.markdown("#### SLO Thresholds")
@@ -970,6 +981,11 @@ def _tab_trace_to_margin() -> None:
         "Reconcile trace-derived inference cost with the provider invoice, "
         "add non-inference cost layers, compute LCPR, and calculate gross margin. "
         "Based on Derivation 6."
+    )
+    st.caption(
+        "This is the reconciled LCPR path from the book. It is the right view "
+        "when you have trace cost, invoice amount, eval spend, human escalation "
+        "cost, ops allocation, and accepted work count for the same period."
     )
 
     st.markdown("#### Cost Components")
@@ -1105,7 +1121,9 @@ def _tab_cache_policy_gate() -> None:
     st.subheader("Cache Policy Gate")
     st.caption(
         "Modeled cache economics. Replace defaults with measured prefix size, TTL, "
-        "and provider cache prices before using this for a production decision."
+        "and provider cache prices before using this for a production decision. "
+        "Break-even reuse is the number of reads needed for one cache write plus "
+        "storage to beat sending the prefix uncached each time."
     )
 
     col1, col2, col3 = st.columns(3)
@@ -1219,6 +1237,11 @@ def _tab_routefit_matrix() -> None:
     st.caption(
         "Template view. It records route feasibility and evidence quality; it does "
         "not claim a route is production-ready without measured or modeled inputs."
+    )
+    st.markdown(
+        "**Evidence labels:** measured = trace/eval data from the route, "
+        "modeled = formula-backed estimate from explicit inputs, estimated = "
+        "placeholder assumption that still needs validation."
     )
 
     default_rows = [
@@ -1340,7 +1363,7 @@ def _flatten_pricing_rows(pricing_data: dict) -> list[dict[str, object]]:
                     "Input $/M": model_data.get("input_rate"),
                     "Output $/M": model_data.get("output_rate"),
                     "Cached $/M": model_data.get("cached_input_rate"),
-                    "Evidence": "public" if "[PUBLIC" in str(model_data) else "modeled",
+                    "Evidence": model_data.get("evidence", "comment_only"),
                 })
     for provider_data in pricing_data.get("dedicated_gpu", {}).values():
         provider = provider_data.get("name", "unknown")
@@ -1352,7 +1375,7 @@ def _flatten_pricing_rows(pricing_data: dict) -> list[dict[str, object]]:
                 "Input $/M": None,
                 "Output $/M": None,
                 "Cached $/M": None,
-                "Evidence": "public" if "[PUBLIC" in str(gpu_data) else "modeled",
+                "Evidence": gpu_data.get("evidence", "comment_only"),
             })
     return rows
 
@@ -1362,7 +1385,10 @@ def _tab_source_snapshot_browser() -> None:
     st.subheader("Source Snapshot Browser")
     st.caption(
         "Displays the local pricing snapshot and flags rows with missing required "
-        "pricing fields. Use it as an audit surface, not a live price refresh."
+        "pricing fields. Use it as an audit surface, not a live price refresh. "
+        "Provider-pricing evidence is currently stored in YAML comments, so the "
+        "table marks those rows as comment_only until evidence metadata is "
+        "promoted to machine-readable fields."
     )
 
     pricing_data = yaml.safe_load(PRICING_PATH.read_text()) or {}
@@ -1498,40 +1524,40 @@ def _tab_operating_views() -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="Inference Field Guide Calculator",
+        page_title="Production Inference Economics Calculator",
         page_icon="$",
         layout="wide",
     )
 
-    st.title("Inference Field Guide Calculator")
+    st.title("Production Inference Economics Calculator")
     st.markdown(
-        "Interactive LCPR calculator from "
-        "[The Honest Field Guide to Production Inference]"
+        "Companion calculator for "
+        "[Production Inference Economics: A Field Guide]"
         "(https://sohailmo.ai/inference-field-guide/). "
-        "All numbers use May 2026 public pricing."
+        "Bundled pricing rows are snapshots last verified in May 2026."
     )
 
     with st.expander("What is LCPR?", expanded=False):
         st.latex(
-            r"\text{LCPR} = \frac{\text{token\_cost} + \text{retry\_cost}"
-            r" + \text{repair\_cost} + \text{engineering\_cost}}"
-            r"{\text{successful\_requests}}"
+            r"\text{LCPR} = \frac{C_{\text{trace}} + \Delta_{\text{invoice}}"
+            r" + C_{\text{eval}} + C_{\text{human}} + C_{\text{ops}}}"
+            r"{A_{\text{accepted work}}}"
         )
         st.markdown(
-            "**Loaded Cost Per Result** — the true cost of getting a "
-            "correct answer:\n"
-            "- **Token cost**: (input × rate + output × rate) × total "
-            "attempts\n"
-            "- **Retry cost**: implicit — every retry burns tokens\n"
-            "- **Repair cost**: quality/schema gate failures × re-prompt "
-            "cost\n"
-            "- **Engineering cost**: monthly stack maintenance hours × "
-            "rate\n"
-            "- **Successful requests**: total × quality gate pass rate\n\n"
+            "**Loaded Cost Per Result** is loaded cost divided by accepted work "
+            "units. The denominator is not raw requests: a unit only counts when "
+            "it passes the workload's quality, latency, reliability, and policy "
+            "gates.\n\n"
+            "- **LCPR Comparison** is a profile estimator for screening providers. "
+            "It models token spend, retries, quality failures, repair cost, and "
+            "engineering overhead from sidebar assumptions.\n"
+            "- **Trace-to-Margin** is the reconciled book formula. Use it when "
+            "you have trace cost, invoice delta, eval cost, human escalation, ops "
+            "allocation, and accepted work count for the same period.\n\n"
             "Full methodology: "
-            "[Part 0 of the essay]"
+            "[Part 1 of the book]"
             "(https://sohailmo.ai/inference-field-guide/"
-            "#part-0-the-cost-illusion)."
+            "#part-1-the-economic-unit)."
         )
 
     calc = LCPRCalculator(PRICING_PATH)

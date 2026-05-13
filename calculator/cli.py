@@ -48,7 +48,7 @@ def _format_dollar(n: float) -> str:
 
 @click.group()
 def cli():
-    """LCPR Calculator — Loaded Cost Per Request analysis for production inference."""
+    """LCPR Calculator — Loaded Cost Per Result analysis for production inference."""
     pass
 
 
@@ -79,7 +79,12 @@ def profiles():
 @click.option("--eng-hours", type=float, default=10, help="Engineering hours per month")
 @click.option("--eng-rate", type=float, default=100, help="Engineer hourly cost ($)")
 @click.option("--cache-hit-rate", type=float, default=0.0, help="Prompt cache hit rate (0.0-1.0)")
-@click.option("--batch-fraction", type=float, default=0.0, help="Fraction eligible for batch pricing (0.0-1.0)")
+@click.option(
+    "--batch-fraction",
+    type=float,
+    default=0.0,
+    help="Fraction eligible for batch pricing (0.0-1.0)",
+)
 @click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table")
 def compare(profile_name, input_tokens, output_tokens, monthly_requests, retry_rate,
             quality_gate, repair_cost, eng_hours, eng_rate, cache_hit_rate, batch_fraction, fmt):
