@@ -6,7 +6,9 @@ from pathlib import Path
 import yaml
 
 from calculator.view_registry import (
+    ADVANCED_APP_TABS,
     APPENDIX_VIEW_NAMES,
+    CORE_APP_TABS,
     IMPLEMENTED_APP_TABS,
     VIEW_REGISTRY,
     view_by_internal_name,
@@ -19,6 +21,17 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_app_tabs_are_registered():
     for tab_name in IMPLEMENTED_APP_TABS:
         assert view_by_public_name(tab_name).status in {"implemented_ui", "template_ui"}
+
+
+def test_core_and_advanced_tabs_cover_implemented():
+    assert CORE_APP_TABS[1:] + ADVANCED_APP_TABS == IMPLEMENTED_APP_TABS
+
+
+def test_decision_trees_tab_removed():
+    all_names = {v.public_name for v in VIEW_REGISTRY}
+    assert "Decision Trees" not in all_names
+    assert "Decision Trees" not in CORE_APP_TABS
+    assert "Decision Trees" not in ADVANCED_APP_TABS
 
 
 def test_appendix_views_are_registered():
@@ -66,10 +79,8 @@ def test_app_explains_full_lcpr_vs_profile_estimator():
     assert "Loaded Cost Per Request" not in app
     assert "successful_requests" not in app
     assert "token\\_cost} + \\text{retry\\_cost}" not in app
-    assert r"C_{\text{trace}}" in app
     assert "accepted work" in app
-    assert "profile estimator for screening providers" in app
-    assert "reconciled book formula" in app
+    assert "Loaded Cost Per Result" in app
 
 
 def test_app_has_no_stale_essay_or_wrong_part_references():
@@ -77,6 +88,7 @@ def test_app_has_no_stale_essay_or_wrong_part_references():
 
     assert "Part 1 of the essay" not in app
     assert "Decision trees from the essay" not in app
+    assert "Decision trees from the book" not in app
     assert "Part 0 of the essay" not in app
     assert "token-volume version of the dedicated break-even gate from Part 4" in app
 

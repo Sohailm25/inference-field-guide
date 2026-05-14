@@ -38,7 +38,11 @@ from calculator.readiness import (
     compute_readiness,
     get_engineering_hours,
 )
-from calculator.view_registry import IMPLEMENTED_APP_TABS, registry_rows
+from calculator.view_registry import (
+    ADVANCED_APP_TABS,
+    CORE_APP_TABS,
+    registry_rows,
+)
 from calculator.workload_profiles import get_profile, list_profiles
 
 PRICING_PATH = Path(__file__).parent / "provider_pricing.yaml"
@@ -68,15 +72,31 @@ def _build_profile_from_sidebar() -> tuple[WorkloadProfile, str]:
 
     if choice == "Custom":
         profile_name = "custom"
-        input_tokens = st.sidebar.slider("Avg input tokens", 50, 10000, 800, step=50)
-        output_tokens = st.sidebar.slider("Avg output tokens", 10, 5000, 400, step=50)
+        input_tokens = st.sidebar.slider(
+            "Avg input tokens", 50, 10000, 800, step=50,
+            help="Average tokens sent per request (prompt + context). Typical: 200-2K for chat, 2K-8K for RAG.",
+        )
+        output_tokens = st.sidebar.slider(
+            "Avg output tokens", 10, 5000, 400, step=50,
+            help="Average tokens generated per response. Output tokens cost 2-6x more than input.",
+        )
         monthly_requests = st.sidebar.number_input(
             "Monthly requests", min_value=10_000, max_value=100_000_000,
             value=500_000, step=100_000,
+            help="Total requests per month before retries and failures.",
         )
-        retry_rate = st.sidebar.slider("Retry rate", 0.0, 0.50, 0.03, step=0.01)
-        quality_gate = st.sidebar.slider("Quality gate pass rate", 0.50, 1.0, 0.95, step=0.01)
-        cache_hit_rate = st.sidebar.slider("Cache hit rate", 0.0, 1.0, 0.0, step=0.05)
+        retry_rate = st.sidebar.slider(
+            "Retry rate", 0.0, 0.50, 0.03, step=0.01,
+            help="Fraction of requests re-sent due to timeouts, rate limits, or schema failures. Typical: 2-5%.",
+        )
+        quality_gate = st.sidebar.slider(
+            "Quality gate pass rate", 0.50, 1.0, 0.95, step=0.01,
+            help="Fraction of responses passing automated quality checks. Below 80% dominates LCPR.",
+        )
+        cache_hit_rate = st.sidebar.slider(
+            "Cache hit rate", 0.0, 1.0, 0.0, step=0.05,
+            help="Fraction of input tokens served from prefix cache. Reduces effective input cost.",
+        )
         batch_fraction = st.sidebar.slider(
             "Batch eligible fraction", 0.0, 1.0, 0.0, step=0.05,
             help="Fraction of requests eligible for batch API pricing",
@@ -90,8 +110,14 @@ def _build_profile_from_sidebar() -> tuple[WorkloadProfile, str]:
             value=0.002, step=0.001, format="%.3f",
             help="Cost to re-prompt a request that fails quality/schema gates",
         )
-        eng_hours = st.sidebar.slider("Engineering hours/month", 0, 80, 8)
-        eng_rate = st.sidebar.slider("Engineer hourly cost ($)", 50, 250, 100, step=10)
+        eng_hours = st.sidebar.slider(
+            "Engineering hours/month", 0, 80, 8,
+            help="Monthly engineering time spent maintaining inference pipeline (ops overhead).",
+        )
+        eng_rate = st.sidebar.slider(
+            "Engineer hourly cost ($)", 50, 250, 100, step=10,
+            help="Fully loaded hourly cost of the engineer maintaining the pipeline.",
+        )
 
         profile = WorkloadProfile(
             avg_input_tokens=input_tokens,
@@ -128,16 +154,20 @@ def _build_profile_from_sidebar() -> tuple[WorkloadProfile, str]:
         monthly_requests = st.sidebar.number_input(
             "Monthly requests", min_value=10_000, max_value=100_000_000,
             value=profile.monthly_requests, step=100_000,
+            help="Total requests per month before retries and failures.",
         )
         retry_rate = st.sidebar.slider(
             "Retry rate", 0.0, 0.50, profile.retry_rate, step=0.01,
+            help="Fraction of requests re-sent due to timeouts, rate limits, or schema failures. Typical: 2-5%.",
         )
         quality_gate = st.sidebar.slider(
             "Quality gate pass rate", 0.50, 1.0,
             profile.quality_gate_pass_rate, step=0.01,
+            help="Fraction of responses passing automated quality checks. Below 80% dominates LCPR.",
         )
         cache_hit_rate = st.sidebar.slider(
             "Cache hit rate", 0.0, 1.0, profile.cache_hit_rate, step=0.05,
+            help="Fraction of input tokens served from prefix cache. Reduces effective input cost.",
         )
         batch_fraction = st.sidebar.slider(
             "Batch eligible fraction", 0.0, 1.0,
@@ -166,12 +196,72 @@ def _build_profile_from_sidebar() -> tuple[WorkloadProfile, str]:
             repair_cost_per_failure=repair_cost,
         )
 
+    # Input validation warnings
+    if profile.avg_input_tokens > 8000:
+        st.sidebar.warning("Input tokens > 8K: long-context workload. Prefill efficiency and KV memory matter.")
+    if profile.retry_rate > 0.15:
+        st.sidebar.warning("Retry rate > 15% is unusually high. Check for schema failures or rate limiting.")
+    if profile.quality_gate_pass_rate < 0.70:
+        st.sidebar.warning("Quality gate < 70%: human escalation will dominate LCPR.")
+    if profile.monthly_requests < 50_000:
+        st.sidebar.info("At < 50K requests/month, serverless is almost always cheapest.")
+
     return profile, profile_name
+
+
+def _tab_start_here() -> None:
+    """Landing tab: explains tool, defines LCPR, glossary, suggested workflow."""
+    st.subheader("Welcome to the LCPR Calculator")
+    st.markdown(
+        "This calculator helps you compare inference providers by **Loaded Cost "
+        "Per Result** (LCPR), the true cost of a successful AI request after "
+        "accounting for retries, quality failures, and operational overhead. "
+        "Use it alongside the "
+        "[Production Inference Economics](https://sohailmo.ai/inference-field-guide/) "
+        "book series."
+    )
+
+    st.info(
+        "**LCPR** = Total loaded cost (inference + invoice delta + eval + human "
+        "escalation + ops) divided by accepted work units. A work unit only counts "
+        "when it passes quality, latency, reliability, and policy gates."
+    )
+
+    st.markdown("#### Suggested Workflow")
+    st.markdown(
+        "1. **Set your workload** in the sidebar (preset or custom)\n"
+        "2. **Compare** providers by LCPR to find the cheapest per accepted result\n"
+        "3. **Sensitivity** -- sweep one parameter to see what moves the needle\n"
+        "4. **Break-Even** -- find the volume where dedicated GPU beats serverless\n"
+        "5. **Migration** -- score readiness factors and estimate timeline\n\n"
+        "Advanced tools (Goodput, Trace-to-Margin, Cache Gate, etc.) are in the "
+        "expander below the core tabs."
+    )
+
+    st.markdown("#### Glossary")
+    glossary = {
+        "LCPR": "Loaded Cost Per Result -- total cost divided by accepted work units.",
+        "Goodput": "Accepted requests per second that pass both latency and quality gates.",
+        "TTFT": "Time To First Token -- latency before the model starts generating.",
+        "TPOT": "Time Per Output Token -- per-token decode latency after the first token.",
+        "KV Cache": "Key-Value cache storing attention state to avoid recomputing prefill tokens.",
+        "Quality Gate": "Pass/fail check on model output (format, accuracy, safety).",
+        "Retry Rate": "Fraction of requests that must be re-sent due to failures or timeouts.",
+        "Accepted Work Unit": "A request that passes all gates (quality, latency, policy).",
+    }
+    rows = [{"Term": k, "Definition": v} for k, v in glossary.items()]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    st.markdown(
+        "**Try it now:** select the *Saas Chat* preset in the sidebar, "
+        "then switch to the **Compare** tab."
+    )
 
 
 def _tab_comparison(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
     """Tab 1: LCPR comparison table and bar chart."""
     st.subheader("LCPR Comparison")
+    st.caption("LCPR = loaded cost / accepted work units. Lower is better. Adjust inputs in the sidebar.")
     st.markdown(
         "Profile-estimated Loaded Cost Per Result across providers, ranked "
         "lowest to highest. This view uses sidebar workload assumptions, pricing "
@@ -224,6 +314,9 @@ def _tab_comparison(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    st.info("**Next:** try **Sensitivity** to see which parameter moves LCPR most, "
+            "or **Break-Even** to check if dedicated GPU saves money at your volume.")
+
 
 def _raw_cost_per_request(
     profile: WorkloadProfile, provider_name: str, calc: LCPRCalculator,
@@ -250,6 +343,7 @@ def _raw_cost_per_request(
 def _tab_sensitivity(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
     """Tab 2: Sensitivity analysis — vary one parameter, see LCPR impact."""
     st.subheader("Sensitivity Analysis")
+    st.caption("Sweep one parameter while holding others constant. Shows which lever moves LCPR most.")
     st.markdown(
         "Select a parameter to vary and see how LCPR changes across providers."
     )
@@ -344,10 +438,14 @@ def _tab_sensitivity(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    st.info("**Next:** adjust sidebar inputs and re-run **Compare**, "
+            "or check **Break-Even** for dedicated vs serverless crossover.")
+
 
 def _tab_breakeven(calc: LCPRCalculator) -> None:
     """Tab 3: Break-even analysis between serverless and dedicated."""
     st.subheader("Break-Even Analysis")
+    st.caption("Find the daily token volume where dedicated GPU beats serverless pricing.")
     st.markdown(
         "Screen the daily output token volume where a dedicated GPU becomes "
         "cheaper than serverless at the stated utilization. This is the "
@@ -498,112 +596,7 @@ def _tab_breakeven(calc: LCPRCalculator) -> None:
             f"${ded_daily:.2f}/day for dedicated."
         )
 
-
-VENDOR_RECOMMENDATIONS = {
-    "Compliance / Regulation": [
-        ("US Federal / FedRAMP", "AWS Bedrock Gov or Azure Gov", "Only viable options"),
-        ("EU data residency", "Nebius Finland/France, Scaleway, Mistral", ""),
-        (
-            "Healthcare / HIPAA",
-            "Baseten (zero-retention default), Together or Fireworks with BAA",
-            "",
-        ),
-        ("Finance + audit", "Baseten Writer reference or hyperscaler", ""),
-    ],
-    "Latency": [
-        ("Raw decode speed", "Groq / Cerebras", "Custom silicon"),
-        ("p95 TTFT <200ms", "Fireworks", "FireAttention + speculation"),
-        ("Agentic multi-hop <500ms", "Together ATLAS or Fireworks FireOptimizer", ""),
-    ],
-    "Cost": [
-        ("Minimize per-token", "DeepInfra", "10-30% below Together/Fireworks"),
-        ("Minimize LCPR", "Run the LCPR Comparison tab with your actual workload", ""),
-        ("Need Multi-LoRA", "Fireworks Multi-LoRA", "$0.20/M for 8B base"),
-    ],
-    "Model flexibility": [
-        ("Broad model catalog", "Together AI", "Widest serverless catalog"),
-        ("Custom Docker / TRT-LLM", "Baseten Truss", "Full runtime control"),
-        ("Fine-tune + serve", "Together or Fireworks", "Customer owns weights"),
-    ],
-    "Operational simplicity": [
-        ("No ML infra team", "Managed: Together, Fireworks, or Baseten dedicated", ""),
-        ("Have infra engineers", "Neo-cloud + vLLM/SGLang (Lambda, CoreWeave, RunPod)", ""),
-    ],
-}
-
-CONSTRAINT_COLORS = {
-    "Compliance / Regulation": "#e8eaf6",
-    "Latency": "#fff3e0",
-    "Cost": "#e3f2fd",
-    "Model flexibility": "#f3e5f5",
-    "Operational simplicity": "#fce4ec",
-}
-
-
-def _vendor_selection_widget() -> None:
-    """Interactive vendor selection based on primary constraint."""
-    constraint = st.radio(
-        "What's your primary constraint?",
-        list(VENDOR_RECOMMENDATIONS.keys()),
-        horizontal=True,
-    )
-
-    recommendations = VENDOR_RECOMMENDATIONS[constraint]
-    bg = CONSTRAINT_COLORS[constraint]
-
-    for sub_need, providers, note in recommendations:
-        note_text = f" — *{note}*" if note else ""
-        st.markdown(
-            f'<div style="background:{bg}; color:#333; padding:12px 16px; '
-            f'border-radius:8px; margin-bottom:8px;">'
-            f"<strong>{sub_need}</strong><br/>"
-            f"{providers}{note_text}</div>",
-            unsafe_allow_html=True,
-        )
-
-
-def _tab_decision_trees() -> None:
-    """Tab 4: Decision tree diagrams."""
-    st.subheader("Decision Frameworks")
-    st.markdown(
-        "Decision trees from the book. Click any heading below to expand. "
-        "Use the **expand icon** (top-right of each diagram) to view full-size."
-    )
-
-    svg_dir = Path(__file__).parent.parent / "decision-trees" / "svg"
-
-    trees = [
-        ("Migration Gate Framework", "migration_gate",
-         "Three gates to determine whether to migrate from closed APIs "
-         "to open-model inference: Volume (>$10K/mo spend), "
-         "Specialization (fine-tuning, latency SLOs, custom arch), "
-         "and Ownership (compliance, data residency, vendor risk)."),
-        ("Inference Sourcing Patterns", "sourcing_patterns",
-         "Four multi-source patterns: Workload-Segmented (different providers "
-         "per workload), Capability-Arbitrage (best provider per capability), "
-         "Primary-Fallback (same model, multiple providers), and "
-         "Geo-Segmented (provider per region/regulation)."),
-        ("Build vs Buy Spectrum", "build_buy_spectrum",
-         "The inference stack has 7 layers. Each is an independent "
-         "build-vs-buy decision. Most layers: buy. Routing Intelligence: hold."),
-    ]
-
-    for title, slug, description in trees:
-        with st.expander(title, expanded=False):
-            st.markdown(description)
-            svg_path = svg_dir / f"{slug}.svg"
-            if svg_path.exists():
-                st.image(str(svg_path), use_container_width=True)
-            else:
-                st.warning(f"Diagram not found: {svg_path}")
-
-    # Vendor Selection — interactive widget instead of static SVG
-    with st.expander("Vendor Selection", expanded=False):
-        st.markdown(
-            "Which provider fits your workload? "
-            "Select your primary constraint to see recommendations."
-        )
-        _vendor_selection_widget()
+    st.info("**Next:** use **Migration** to score readiness factors and estimate timeline.")
 
 
 FACTOR_OPTIONS = {
@@ -667,6 +660,7 @@ TIER_COLORS = {
 def _tab_readiness(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
     """Tab 5: Migration readiness assessment."""
     st.subheader("Migration Readiness Assessment")
+    st.caption("Score readiness factors to estimate migration complexity and timeline.")
     st.markdown(
         "Score 6 factors to estimate migration complexity, timeline, "
         "and engineering investment. This is a readiness screen for the "
@@ -852,6 +846,9 @@ def _tab_readiness(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
         st.markdown("#### Readiness Gaps")
         for gap in result.gaps:
             st.warning(f"**{gap}**")
+
+    st.info("**Deep dive:** expand **Advanced Tools** below for Goodput, "
+            "Trace-to-Margin, Cache Gate, and KV Capacity analysis.")
 
 
 def _tab_goodput() -> None:
@@ -1537,29 +1534,6 @@ def main() -> None:
         "Bundled pricing rows are snapshots last verified in May 2026."
     )
 
-    with st.expander("What is LCPR?", expanded=False):
-        st.latex(
-            r"\text{LCPR} = \frac{C_{\text{trace}} + \Delta_{\text{invoice}}"
-            r" + C_{\text{eval}} + C_{\text{human}} + C_{\text{ops}}}"
-            r"{A_{\text{accepted work}}}"
-        )
-        st.markdown(
-            "**Loaded Cost Per Result** is loaded cost divided by accepted work "
-            "units. The denominator is not raw requests: a unit only counts when "
-            "it passes the workload's quality, latency, reliability, and policy "
-            "gates.\n\n"
-            "- **LCPR Comparison** is a profile estimator for screening providers. "
-            "It models token spend, retries, quality failures, repair cost, and "
-            "engineering overhead from sidebar assumptions.\n"
-            "- **Trace-to-Margin** is the reconciled book formula. Use it when "
-            "you have trace cost, invoice delta, eval cost, human escalation, ops "
-            "allocation, and accepted work count for the same period.\n\n"
-            "Full methodology: "
-            "[Part 1 of the book]"
-            "(https://sohailmo.ai/inference-field-guide/"
-            "#part-1-the-economic-unit)."
-        )
-
     calc = LCPRCalculator(PRICING_PATH)
 
     # Load profile from permalink query param if present
@@ -1638,34 +1612,38 @@ def main() -> None:
             })
         st.table(rows)
 
-    tabs = st.tabs(IMPLEMENTED_APP_TABS)
+    core_tabs = st.tabs(CORE_APP_TABS)
 
-    with tabs[0]:
+    with core_tabs[0]:
+        _tab_start_here()
+    with core_tabs[1]:
         _tab_comparison(calc, profile)
-    with tabs[1]:
+    with core_tabs[2]:
         _tab_sensitivity(calc, profile)
-    with tabs[2]:
+    with core_tabs[3]:
         _tab_breakeven(calc)
-    with tabs[3]:
+    with core_tabs[4]:
         _tab_readiness(calc, profile)
-    with tabs[4]:
-        _tab_decision_trees()
-    with tabs[5]:
-        _tab_goodput()
-    with tabs[6]:
-        _tab_trace_to_margin()
-    with tabs[7]:
-        _tab_cache_policy_gate()
-    with tabs[8]:
-        _tab_kv_capacity()
-    with tabs[9]:
-        _tab_routefit_matrix()
-    with tabs[10]:
-        _tab_trace_event_schema()
-    with tabs[11]:
-        _tab_source_snapshot_browser()
-    with tabs[12]:
-        _tab_operating_views()
+
+    with st.expander("Advanced Tools", expanded=False):
+        adv_tabs = st.tabs(ADVANCED_APP_TABS)
+
+        with adv_tabs[0]:
+            _tab_goodput()
+        with adv_tabs[1]:
+            _tab_trace_to_margin()
+        with adv_tabs[2]:
+            _tab_cache_policy_gate()
+        with adv_tabs[3]:
+            _tab_kv_capacity()
+        with adv_tabs[4]:
+            _tab_routefit_matrix()
+        with adv_tabs[5]:
+            _tab_trace_event_schema()
+        with adv_tabs[6]:
+            _tab_source_snapshot_browser()
+        with adv_tabs[7]:
+            _tab_operating_views()
 
 
 if __name__ == "__main__":
