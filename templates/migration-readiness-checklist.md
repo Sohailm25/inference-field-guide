@@ -20,7 +20,7 @@ Fill in each gate. All three gates must pass before proceeding to execution phas
 - [ ] Payback period (migration cost / monthly savings): ________ months
 - [ ] **Gate 1 verdict**: PASS / FAIL
 
-Run exact numbers at: https://inference-field-guide.streamlit.app
+Run exact numbers at: https://inference-econ.streamlit.app
 
 ---
 

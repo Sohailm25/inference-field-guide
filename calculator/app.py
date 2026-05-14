@@ -1581,7 +1581,7 @@ def main() -> None:
     # Share button
     st.sidebar.markdown("---")
     _encoded = encode_profile(profile)
-    _share_url = f"https://inference-field-guide.streamlit.app/?config={_encoded}"
+    _share_url = f"https://inference-econ.streamlit.app/?config={_encoded}"
     st.sidebar.text_input(
         "Share this config",
         value=_share_url,

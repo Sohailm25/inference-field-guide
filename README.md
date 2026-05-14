@@ -21,7 +21,7 @@ The Loaded Cost Per Result (LCPR) calculator computes true cost per accepted wor
 
 ### Interactive App
 
-[inference-field-guide.streamlit.app](https://inference-field-guide.streamlit.app)
+[inference-econ.streamlit.app](https://inference-econ.streamlit.app)
 
 Visible app tabs:
 

@@ -1,6 +1,6 @@
 # Migration Readiness Assessment
 # Polynomial complexity scoring from The Honest Field Guide to Production Inference
-# Interactive version: https://inference-field-guide.streamlit.app (Migration Readiness tab)
+# Interactive version: https://inference-econ.streamlit.app (Migration Readiness tab)
 #
 # Instructions:
 #   1. Score each factor 1 (Low), 2 (Medium), or 3 (High)
