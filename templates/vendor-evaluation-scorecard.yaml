@@ -46,7 +46,7 @@ gates:
     checks:
       - input_rate_per_m_tokens: null   # $/M input tokens
       - output_rate_per_m_tokens: null  # $/M output tokens
-      - lcpr_calculated: null           # Use https://inference-field-guide.streamlit.app
+      - lcpr_calculated: null           # Use https://inference-econ.streamlit.app
       - monthly_cost_at_volume: null
       - compared_against_n_vendors: null
 

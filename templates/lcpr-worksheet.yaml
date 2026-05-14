@@ -5,7 +5,7 @@
 # LCPR = (token_cost + retry_cost + repair_cost + engineering_cost)
 #        / successful_requests
 #
-# Interactive calculator: https://inference-field-guide.streamlit.app
+# Interactive calculator: https://inference-econ.streamlit.app
 
 workload:
   name: ""
