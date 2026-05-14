@@ -4,7 +4,7 @@ TCO frameworks, vendor evaluation, and architecture patterns for teams running i
 
 Companion calculator for [Production Inference Economics: A Field Guide](https://sohailmo.ai/inference-field-guide/) and the [LCPR-2026 framework](https://sohailmo.ai/lcpr-calculator-v2/).
 
-## LCPR Calculator v2
+## LCPR Calculator
 
 The Loaded Cost Per Result (LCPR) calculator computes true cost per accepted work unit across deployment modes. It accounts for retries, quality gate failures, eval grader cost, human escalation, operational overhead, and the invoice reconciliation delta.
 
