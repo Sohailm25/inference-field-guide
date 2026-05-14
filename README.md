@@ -4,7 +4,7 @@ TCO frameworks, vendor evaluation, and architecture patterns for teams running i
 
 Companion calculator for [Production Inference Economics: A Field Guide](https://sohailmo.ai/inference-field-guide/) and the [LCPR-2026 framework](https://sohailmo.ai/lcpr-calculator-v2/).
 
-## LCPR Calculator v2
+## LCPR Calculator
 
 The Loaded Cost Per Result (LCPR) calculator computes true cost per accepted work unit across deployment modes. It accounts for retries, quality gate failures, eval grader cost, human escalation, operational overhead, and the invoice reconciliation delta.
 
@@ -23,21 +23,24 @@ The Loaded Cost Per Result (LCPR) calculator computes true cost per accepted wor
 
 [inference-econ.streamlit.app](https://inference-econ.streamlit.app)
 
-Visible app tabs:
+Core tabs:
 
-1. LCPR Comparison
-2. Sensitivity Analysis
-3. Break-Even Analysis
-4. Migration Readiness
-5. Decision Trees
-6. Goodput Frontier
-7. Trace-to-Margin
-8. Cache Policy Gate
-9. KV Capacity Envelope
-10. RouteFit Matrix
-11. Trace Event Schema
-12. Source Snapshot Browser
-13. Operating Views
+1. Start Here — landing page with LCPR definition, glossary, and suggested workflow
+2. Compare — LCPR comparison across providers
+3. Sensitivity — parameter sweep to find dominant cost lever
+4. Break-Even — dedicated vs serverless crossover volume
+5. Migration — readiness scoring and timeline estimate
+
+Advanced Tools (collapsed by default):
+
+1. Goodput — accepted requests/sec under SLO
+2. Trace-to-Margin — reconcile traces to invoice
+3. Cache Gate — cache break-even reuse count
+4. KV Capacity — concurrent sequence limits
+5. RouteFit — provider-workload fit matrix
+6. Trace Schema — trace event format reference
+7. Snapshots — source pricing snapshots
+8. Operations — spend, commitment, and variance views
 
 ### CLI
 

@@ -18,26 +18,31 @@ class CalculatorView:
     exercised_by_examples: tuple[str, ...] = ()
 
 
-IMPLEMENTED_APP_TABS = (
-    "LCPR Comparison",
-    "Sensitivity Analysis",
-    "Break-Even Analysis",
-    "Migration Readiness",
-    "Decision Trees",
-    "Goodput Frontier",
-    "Trace-to-Margin",
-    "Cache Policy Gate",
-    "KV Capacity Envelope",
-    "RouteFit Matrix",
-    "Trace Event Schema",
-    "Source Snapshot Browser",
-    "Operating Views",
+CORE_APP_TABS = (
+    "Start Here",
+    "Compare",
+    "Sensitivity",
+    "Break-Even",
+    "Migration",
 )
+
+ADVANCED_APP_TABS = (
+    "Goodput",
+    "Trace-to-Margin",
+    "Cache Gate",
+    "KV Capacity",
+    "RouteFit",
+    "Trace Schema",
+    "Snapshots",
+    "Operations",
+)
+
+IMPLEMENTED_APP_TABS = CORE_APP_TABS[1:] + ADVANCED_APP_TABS
 
 
 APPENDIX_VIEW_NAMES = (
     "Workload Profile",
-    "Trace Event Schema",
+    "Trace Schema",
     "Latency Decomposition",
     "SLO-to-Route Mapping",
     "Cost Per Accepted Work",
@@ -47,15 +52,22 @@ APPENDIX_VIEW_NAMES = (
     "Account Margin Model",
     "Usage Signals",
     "Security and Compliance Filter",
-    "Cache Policy Gate",
-    "KV Capacity Envelope",
+    "Cache Gate",
+    "KV Capacity",
     "Dedicated Break-Even",
 )
 
 
 VIEW_REGISTRY = (
     CalculatorView(
-        public_name="LCPR Comparison",
+        public_name="Start Here",
+        internal_name="Start Here v1",
+        status="implemented_ui",
+        evidence_mode="user_input",
+        reference="Landing page / glossary",
+    ),
+    CalculatorView(
+        public_name="Compare",
         internal_name="LCPR-2026",
         status="implemented_ui",
         evidence_mode="modeled",
@@ -63,14 +75,14 @@ VIEW_REGISTRY = (
         exercised_by_examples=("support-answer", "coding-agent", "benchmark-audit"),
     ),
     CalculatorView(
-        public_name="Sensitivity Analysis",
+        public_name="Sensitivity",
         internal_name="Sensitivity Analysis v1",
         status="implemented_ui",
         evidence_mode="modeled",
         reference="Calculator utility view",
     ),
     CalculatorView(
-        public_name="Break-Even Analysis",
+        public_name="Break-Even",
         internal_name="Break-Even Analysis v1",
         status="implemented_ui",
         evidence_mode="modeled",
@@ -84,21 +96,14 @@ VIEW_REGISTRY = (
         reference="Part 4 / Appendix View 14",
     ),
     CalculatorView(
-        public_name="Migration Readiness",
+        public_name="Migration",
         internal_name="Migration Readiness v1",
         status="implemented_ui",
         evidence_mode="modeled",
         reference="Part 4 migration gates",
     ),
     CalculatorView(
-        public_name="Decision Trees",
-        internal_name="Decision Frameworks v1",
-        status="implemented_ui",
-        evidence_mode="template",
-        reference="Part 4 decision frameworks",
-    ),
-    CalculatorView(
-        public_name="Goodput Frontier",
+        public_name="Goodput",
         internal_name="Goodput Frontier Test v1",
         status="implemented_ui",
         evidence_mode="synthetic_or_measured",
@@ -114,7 +119,7 @@ VIEW_REGISTRY = (
         exercised_by_examples=("support-answer",),
     ),
     CalculatorView(
-        public_name="Cache Policy Gate",
+        public_name="Cache Gate",
         internal_name="Cache Policy Gate v1",
         status="implemented_ui",
         evidence_mode="modeled",
@@ -122,14 +127,14 @@ VIEW_REGISTRY = (
         exercised_by_examples=("support-answer", "coding-agent"),
     ),
     CalculatorView(
-        public_name="KV Capacity Envelope",
+        public_name="KV Capacity",
         internal_name="KV Capacity Envelope v1",
         status="implemented_ui",
         evidence_mode="derived",
         reference="Part 2 / Derivation 2 / Appendix View 13",
     ),
     CalculatorView(
-        public_name="RouteFit Matrix",
+        public_name="RouteFit",
         internal_name="RouteFit Matrix v1",
         status="template_ui",
         evidence_mode="user_input",
@@ -137,21 +142,21 @@ VIEW_REGISTRY = (
         exercised_by_examples=("benchmark-audit",),
     ),
     CalculatorView(
-        public_name="Trace Event Schema",
+        public_name="Trace Schema",
         internal_name="Trace Event Schema v1",
         status="template_ui",
         evidence_mode="user_input",
         reference="Part 1 / Appendix View 2",
     ),
     CalculatorView(
-        public_name="Source Snapshot Browser",
+        public_name="Snapshots",
         internal_name="Source Snapshot Browser v1",
         status="template_ui",
         evidence_mode="public_snapshot",
         reference="Appendix A.4",
     ),
     CalculatorView(
-        public_name="Operating Views",
+        public_name="Operations",
         internal_name="Operating Views v1",
         status="template_ui",
         evidence_mode="user_input",
