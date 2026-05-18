@@ -459,10 +459,142 @@ def _break_even_render(
 
 # ── Goodput view (Task 9) ──
 @app.cell
-def _goodput(mo, MarimoView):
-    """Goodput frontier — to be implemented in Task 9."""
-    mo.md(f"# {MarimoView.GOODPUT.value} — TODO")
-    return
+def _goodput_inputs(mo):
+    """Goodput view — input cell.
+    Real compute_goodput signature operates on per-request samples
+    (list[GoodputRequest] + SLO thresholds), NOT a single SLO struct.
+    We synthesize a representative request batch from summary rates,
+    mirroring the legacy app's screening pattern (lcpr.py:compute_goodput).
+    """
+    ttft_slo = mo.ui.slider(100, 5000, value=800, step=100, label="TTFT SLO (ms)")
+    tpot_slo = mo.ui.slider(10, 200, value=50, step=5, label="TPOT SLO (ms/tok)")
+    latency_pass_slider = mo.ui.slider(
+        0.0, 1.0, value=0.90, step=0.01,
+        label="Latency pass rate (frac. meeting TTFT+TPOT SLO)",
+    )
+    cost_per_req = mo.ui.number(
+        start=0.0001, stop=1.0, value=0.011, step=0.0005,
+        label="Cost per request ($)",
+    )
+    return ttft_slo, tpot_slo, latency_pass_slider, cost_per_req
+
+
+@app.cell
+def _goodput_render(
+    mo, profile, compute_goodput, workload_dd,
+    ttft_slo, tpot_slo, latency_pass_slider, cost_per_req,
+    MARIMO_VIEW_META, MarimoView,
+):
+    """Goodput view — accepted req/s under SLO + cost per accepted result.
+
+    Adapted from plan: compute_goodput takes per-request samples, not a
+    profile object. We synthesize 200 requests from (quality_pass_rate
+    from profile) × (latency_pass_rate from slider), then route them
+    through compute_goodput with the user's SLO thresholds.
+    Prose verdict first; details below in an expander (spec §9.1 step 7).
+    """
+    try:
+        from calculator.lcpr import GoodputRequest
+
+        # Source quality pass rate from the workload profile so the
+        # view is reactive to the Landing dropdown.
+        quality_rate = profile.quality_gate_pass_rate
+        latency_rate = latency_pass_slider.value
+        n = 200  # screening batch size — enough to stabilize p99
+        n_quality_pass = int(n * quality_rate)
+        n_latency_pass = int(n * latency_rate)
+        # Approximate intersection assuming independence
+        n_both = int(n * quality_rate * latency_rate)
+
+        ttft_slo_ms = float(ttft_slo.value)
+        tpot_slo_ms = float(tpot_slo.value)
+        # Synthesize "passing" and "failing" archetypes around the SLO
+        ttft_pass_val = max(50.0, ttft_slo_ms * 0.6)
+        ttft_fail_val = ttft_slo_ms * 1.75
+        tpot_pass_val = max(5.0, tpot_slo_ms * 0.8)
+        tpot_fail_val = tpot_slo_ms * 1.4
+        cpr = float(cost_per_req.value)
+
+        requests = []
+        for i in range(n):
+            if i < n_both:
+                qp, ttft, tpot = True, ttft_pass_val, tpot_pass_val
+            elif i < n_quality_pass:
+                qp, ttft, tpot = True, ttft_fail_val, tpot_fail_val
+            elif i < n_quality_pass + max(0, n_latency_pass - n_both):
+                qp, ttft, tpot = False, ttft_pass_val, tpot_pass_val
+            else:
+                qp, ttft, tpot = False, ttft_fail_val, tpot_fail_val
+            requests.append(GoodputRequest(
+                ttft_ms=ttft,
+                tpot_ms=tpot,
+                output_tokens=profile.avg_output_tokens,
+                quality_pass=qp,
+                cost=cpr,
+            ))
+
+        # Duration: assume 1 second of arrivals — goodput_rate then
+        # reads as "accepted requests in this batch" per second.
+        duration = 1.0
+        gp = compute_goodput(requests, duration, ttft_slo_ms, tpot_slo_ms)
+
+        # Cost per accepted may be +inf if zero accepted; render safely.
+        if gp.accepted_requests == 0:
+            cost_str = "**∞** (no requests passed both gates)"
+            verdict = mo.md(
+                f"At TTFT ≤ **{ttft_slo_ms:.0f} ms** and TPOT ≤ **{tpot_slo_ms:.0f} ms/tok**, "
+                f"the `{workload_dd.value}` workload sustains **0 accepted req/s** — "
+                f"every request fails at least one gate."
+            )
+        else:
+            cost_str = f"**${gp.cost_per_accepted:.4f}**"
+            verdict = mo.md(
+                f"At TTFT ≤ **{ttft_slo_ms:.0f} ms**, TPOT ≤ **{tpot_slo_ms:.0f} ms/tok**, "
+                f"and quality ≥ **{quality_rate:.0%}** (from `{workload_dd.value}` preset), "
+                f"this workload sustains **{gp.goodput_rate:.1f} accepted req/s** at "
+                f"{cost_str} per accepted result."
+            )
+
+        details = mo.accordion({
+            "Details": mo.md(
+                f"- Total requests in screening batch: **{gp.total_requests}**\n"
+                f"- Accepted (passed all gates): **{gp.accepted_requests}** "
+                f"({gp.accepted_requests / gp.total_requests:.0%})\n"
+                f"- Goodput rate: **{gp.goodput_rate:.2f} accepted req/s**\n"
+                f"- Cost per accepted: {cost_str}\n"
+                f"- Total cost (all requests, paid even for failures): "
+                f"**${gp.total_cost:.4f}**\n"
+                f"- TTFT p99: **{gp.ttft_p99_ms:.0f} ms** "
+                f"(SLO: {ttft_slo_ms:.0f} ms)\n"
+                f"- TPOT p99: **{gp.tpot_p99_ms:.2f} ms/tok** "
+                f"(SLO: {tpot_slo_ms:.0f} ms)\n"
+                f"- Quality pass rate: **{gp.quality_pass_rate:.0%}** "
+                f"(from profile)\n"
+                f"- Latency pass rate: **{gp.latency_pass_rate:.0%}** "
+                f"(from synthesis slider)"
+            ),
+        })
+
+        caption = mo.md(
+            f"<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
+            f"Source: synthesized {n}-request batch from `{workload_dd.value}` profile · "
+            f"Derivation 5 (goodput = accepted/duration)</small>"
+        )
+
+        gp_block = mo.vstack([
+            mo.md(f"## {MARIMO_VIEW_META[MarimoView.GOODPUT].label}"),
+            mo.hstack(
+                [ttft_slo, tpot_slo, latency_pass_slider, cost_per_req],
+                justify="start",
+            ),
+            verdict,
+            details,
+            caption,
+        ])
+    except Exception as e:
+        gp_block = mo.md(f"_Goodput computation error: {e}_")
+    gp_block
+    return gp_block
 
 
 # ── Trace-to-Margin view (Task 10) ──
