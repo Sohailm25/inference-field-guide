@@ -67,10 +67,79 @@ def _theme_css(mo):
 
 # ── Landing view (Task 5) ──
 @app.cell
-def _landing(mo, MarimoView):
-    """Mad-libs landing — to be implemented in Task 5."""
-    mo.md(f"# {MarimoView.LANDING.value} — TODO")
-    return
+def _landing(mo, calc, get_profile, list_profiles, MARIMO_VIEW_META):
+    """Mad-libs Landing — replaces the legacy 'Start Here' glossary.
+    Sentence with editable slots: model · workload · token mix · filter.
+    Below the sentence, a one-paragraph verdict computed from defaults.
+    """
+    profile_names = list_profiles()
+    workload_dd = mo.ui.dropdown(
+        options=profile_names,
+        value="saas_chat" if "saas_chat" in profile_names else profile_names[0],
+        label="workload",
+    )
+
+    # Static "model" and "token mix" slots for now — the workload preset
+    # carries those numbers. The Compare view (Task 6) lets users override.
+    model_label = mo.md("**Llama 3.1 8B**")  # display-only; pricing is per-provider
+    tokens_label = mo.md("**from preset**")
+    filter_dd = mo.ui.dropdown(
+        options=["every benchmarked configuration", "open-weight serverless only", "dedicated GPU only", "closed-API only"],
+        value="every benchmarked configuration",
+        label="filter",
+    )
+
+    return workload_dd, filter_dd, model_label, tokens_label
+
+
+@app.cell
+def _landing_render(mo, MARIMO_VIEW_META, MarimoView, workload_dd, filter_dd, calc, get_profile):
+    """Render the Mad-libs sentence + verdict paragraph.
+    Reactive on workload_dd / filter_dd changes.
+    """
+    profile = get_profile(workload_dd.value)
+    results = calc.compare(profile)
+    sorted_results = sorted(results, key=lambda r: r.lcpr)
+    cheapest = sorted_results[0] if sorted_results else None
+    second = sorted_results[1] if len(sorted_results) > 1 else None
+
+    sentence = mo.md(
+        f"I want to serve **Llama 3.1 8B** for **{workload_dd.value}**, "
+        f"expecting **{profile.avg_input_tokens:,} in / {profile.avg_output_tokens:,} out** "
+        f"tokens per call. Show me LCPR across **{filter_dd.value}**."
+    )
+
+    if cheapest and second:
+        verdict = mo.md(
+            f"At your volume, **{cheapest.provider_name}** is cheapest at LCPR "
+            f"**${cheapest.lcpr:.4f}** vs. **{second.provider_name}** at LCPR "
+            f"**${second.lcpr:.4f}**. See the **Compare** view for the full table."
+        )
+    elif cheapest:
+        verdict = mo.md(
+            f"At your volume, **{cheapest.provider_name}** is the only matching config "
+            f"at LCPR **${cheapest.lcpr:.4f}**."
+        )
+    else:
+        verdict = mo.md("_No matching configurations for this filter._")
+
+    landing_block = mo.vstack([
+        mo.md(f"# Production Inference Economics — {MARIMO_VIEW_META[MarimoView.LANDING].label}"),
+        mo.hstack([workload_dd, filter_dd], justify="start"),
+        sentence,
+        verdict,
+        mo.accordion({
+            "Terminology": mo.md(
+                "**LCPR** — Loaded Cost Per Result. The cost per *accepted* unit of work, "
+                "after retries, quality-gate failures, eval cost, and escalation. "
+                "Different from $/M-tokens because retries and gates can dominate.\n\n"
+                "**Workload profile** — A named bundle of (avg input tokens, avg output tokens, "
+                "monthly requests, retry rate, quality-gate rate, cache rate, batch fraction)."
+            ),
+        }),
+    ])
+    landing_block
+    return landing_block, profile, results, cheapest
 
 
 # ── Compare view (Task 6) ──
