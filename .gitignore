@@ -30,3 +30,8 @@ site/.astro/
 *.swp
 *.swo
 *~
+.claude/
+thoughts/
+uv.lock
+calculator/.tldr/
+history/.tmp/
