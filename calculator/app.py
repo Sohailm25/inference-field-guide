@@ -309,7 +309,7 @@ def _tab_comparison(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
         xaxis_tickangle=-45,
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#e8e8e8",
+        font_color="#1a1a1a",
         height=500,
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -433,7 +433,7 @@ def _tab_sensitivity(calc: LCPRCalculator, profile: WorkloadProfile) -> None:
     fig.update_layout(
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#e8e8e8",
+        font_color="#1a1a1a",
         height=500,
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -577,7 +577,7 @@ def _tab_breakeven(calc: LCPRCalculator) -> None:
         yaxis_title="Daily Cost ($)",
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#e8e8e8",
+        font_color="#1a1a1a",
         height=500,
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -1078,7 +1078,7 @@ def _tab_trace_to_margin() -> None:
         showlegend=False,
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#e8e8e8",
+        font_color="#1a1a1a",
         height=400,
     )
     st.plotly_chart(fig, use_container_width=True)
