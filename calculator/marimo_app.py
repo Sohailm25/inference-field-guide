@@ -144,10 +144,62 @@ def _landing_render(mo, MARIMO_VIEW_META, MarimoView, workload_dd, filter_dd, ca
 
 # ── Compare view (Task 6) ──
 @app.cell
-def _compare(mo, MarimoView):
-    """LCPR comparison — to be implemented in Task 6."""
-    mo.md(f"# {MarimoView.COMPARE.value} — TODO")
-    return
+def _compare(mo, go, workload_dd, results, MARIMO_VIEW_META, MarimoView):
+    """Compare view — LCPR across providers + deployments for current workload."""
+    if not results:
+        compare_block = mo.md(f"## {MARIMO_VIEW_META[MarimoView.COMPARE].label}\n\n_No matching results._")
+    else:
+        sorted_results = sorted(results, key=lambda r: r.lcpr)
+
+        # Plotly bar chart, moss + oxblood palette per book.css
+        deploy_color = {
+            "closed_api": "#5C2A1E",       # oxblood — closed API
+            "serverless_open": "#3A4F2A",  # moss — serverless open
+            "dedicated": "#7a8a5a",        # moss-light — dedicated
+        }
+
+        fig = go.Figure()
+        for r in sorted_results:
+            fig.add_bar(
+                x=[f"{r.provider_name} · {r.deployment_mode}"],
+                y=[r.lcpr],
+                marker_color=deploy_color.get(r.deployment_mode, "#3A4F2A"),
+                showlegend=False,
+                hovertemplate=f"<b>{r.provider_name}</b><br>LCPR: $%{{y:.4f}}<extra>{r.deployment_mode}</extra>",
+            )
+        fig.update_layout(
+            plot_bgcolor="#faf5e9",
+            paper_bgcolor="#faf5e9",
+            font_family="Newsreader, Iowan Old Style, Georgia, serif",
+            font_color="#1a1a1a",
+            xaxis=dict(gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11)),
+            yaxis=dict(title="LCPR ($)", gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11)),
+            margin=dict(t=10, b=40, l=60, r=20),
+            height=400,
+        )
+
+        # Prose verdict above the chart. WorkloadProfile has no .name attribute,
+        # so we use workload_dd.value (the profile key string) for display.
+        cheapest = sorted_results[0]
+        verdict = mo.md(
+            f"**{cheapest.provider_name} ({cheapest.deployment_mode})** is the lowest loaded cost per accepted result "
+            f"at **${cheapest.lcpr:.4f}** for your `{workload_dd.value}` profile."
+        )
+
+        # Source caption
+        caption = mo.md(
+            f"<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
+            f"Source: provider pricing snapshot · Derivation 1</small>"
+        )
+
+        compare_block = mo.vstack([
+            mo.md(f"## {MARIMO_VIEW_META[MarimoView.COMPARE].label}"),
+            verdict,
+            mo.ui.plotly(fig),
+            caption,
+        ])
+    compare_block
+    return compare_block
 
 
 # ── Sensitivity view (Task 7) ──
