@@ -717,12 +717,218 @@ def _trace_to_margin(
 
 # ── Advanced view (Task 11) ──
 @app.cell
-def _advanced(mo, MarimoView):
-    """Collapsible group: cache gate, KV capacity, RouteFit, trace schema, snapshots, operations.
-    To be implemented in Task 11.
+def _advanced_cache_inputs(mo):
+    """Input controls for the Cache Gate sub-tool.
+
+    Field names match the real compute_cache_break_even signature
+    (prefix_tokens, uncached_input_price_per_m, cache_write_price_per_m,
+    cache_read_price_per_m, storage_price_per_m_hour, storage_hours).
+    The plan's ttl_hours / reuse_rate / per_call_savings kwargs do not
+    exist on the function — adapted to the real Derivation 3 formula.
     """
-    mo.md(f"# {MarimoView.ADVANCED.value} — TODO")
-    return
+    cache_prefix_tokens = mo.ui.number(
+        value=50000, start=0, step=1000, label="Cacheable prefix tokens",
+    )
+    cache_uncached_price = mo.ui.number(
+        value=3.00, start=0.0, step=0.10, label="Uncached input price ($/M)",
+    )
+    cache_write_price = mo.ui.number(
+        value=3.75, start=0.0, step=0.10, label="Cache write price ($/M)",
+    )
+    cache_read_price = mo.ui.number(
+        value=0.30, start=0.0, step=0.05, label="Cache read price ($/M)",
+    )
+    cache_storage_price = mo.ui.number(
+        value=0.0, start=0.0, step=0.01, label="Storage price ($/M-hour)",
+    )
+    cache_storage_hours = mo.ui.number(
+        value=0.0, start=0.0, step=0.25, label="Retention hours",
+    )
+    return (
+        cache_prefix_tokens, cache_uncached_price, cache_write_price,
+        cache_read_price, cache_storage_price, cache_storage_hours,
+    )
+
+
+@app.cell
+def _advanced_kv_inputs(mo):
+    """Input controls for the KV Capacity sub-tool.
+
+    Field names match the real compute_kv_sizing signature (n_layers,
+    n_kv_heads, head_dim, element_bytes, kv_pool_bytes, resident_tokens,
+    headroom_fraction, weight_bytes). The plan's context_length /
+    hbm_budget_gb / model_size_b / kv_bytes_per_token kwargs are not
+    the real API — adapted to Derivation 2 formula.
+    """
+    kv_n_layers = mo.ui.number(
+        value=80, start=1, step=1, label="Layers",
+    )
+    kv_n_heads = mo.ui.number(
+        value=8, start=1, step=1, label="KV heads",
+    )
+    kv_head_dim = mo.ui.number(
+        value=128, start=1, step=8, label="Head dimension",
+    )
+    kv_element_bytes = mo.ui.dropdown(
+        options={"1 (int8)": 1, "2 (fp16/bf16)": 2, "4 (fp32)": 4},
+        value="2 (fp16/bf16)",
+        label="KV dtype bytes",
+    )
+    kv_pool_gb = mo.ui.number(
+        value=40.0, start=0.1, step=1.0, label="KV pool (GB)",
+    )
+    kv_resident_tokens = mo.ui.number(
+        value=4096, start=1, step=1024, label="Resident tokens / sequence",
+    )
+    kv_headroom = mo.ui.slider(
+        0.0, 0.50, value=0.10, step=0.05, label="Headroom fraction",
+    )
+    kv_weight_gb = mo.ui.number(
+        value=140.0, start=0.0, step=1.0, label="Weight memory (GB, optional)",
+    )
+    return (
+        kv_n_layers, kv_n_heads, kv_head_dim, kv_element_bytes,
+        kv_pool_gb, kv_resident_tokens, kv_headroom, kv_weight_gb,
+    )
+
+
+@app.cell
+def _advanced(
+    mo, compute_cache_break_even, compute_kv_sizing,
+    cache_prefix_tokens, cache_uncached_price, cache_write_price,
+    cache_read_price, cache_storage_price, cache_storage_hours,
+    kv_n_layers, kv_n_heads, kv_head_dim, kv_element_bytes,
+    kv_pool_gb, kv_resident_tokens, kv_headroom, kv_weight_gb,
+    MARIMO_VIEW_META, MarimoView,
+):
+    """Advanced view — collapsible group of 7 sub-tools.
+
+    Cache Gate (Derivation 3) and KV Capacity (Derivation 2) are live.
+    Migration, RouteFit, Trace Schema, Snapshots, and Operations are
+    stubbed as P2-T11.1-T11.5 follow-up tasks (see plan).
+
+    Each compute call is wrapped in try/except so a single bad input
+    does not blank the whole view.
+    """
+    # ── Cache Gate sub-panel ──
+    try:
+        cache_result = compute_cache_break_even(
+            prefix_tokens=int(cache_prefix_tokens.value),
+            uncached_input_price_per_m=float(cache_uncached_price.value),
+            cache_write_price_per_m=float(cache_write_price.value),
+            cache_read_price_per_m=float(cache_read_price.value),
+            storage_price_per_m_hour=float(cache_storage_price.value),
+            storage_hours=float(cache_storage_hours.value),
+        )
+        if cache_result.break_even_requests == float("inf"):
+            break_even_text = "**Never** (cache read price ≥ uncached price)"
+        else:
+            break_even_text = f"**{cache_result.break_even_requests:.2f}** reuses"
+        savings_10 = cache_result.savings_at_n.get(10, 0.0)
+        savings_100 = cache_result.savings_at_n.get(100, 0.0)
+        cache_panel = mo.vstack([
+            mo.hstack(
+                [cache_prefix_tokens, cache_uncached_price, cache_write_price],
+                justify="start",
+            ),
+            mo.hstack(
+                [cache_read_price, cache_storage_price, cache_storage_hours],
+                justify="start",
+            ),
+            mo.md(
+                f"Cache pays off at {break_even_text} of the cached prefix. "
+                f"Storage cost over retention: **${cache_result.storage_cost:.4f}**. "
+                f"Projected savings at 10 reuses: **${savings_10:.4f}**; "
+                f"at 100 reuses: **${savings_100:.4f}**."
+            ),
+            mo.md(
+                "<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
+                "Source: user inputs · Derivation 3 "
+                "(N_break_even = (p_write − p_read + H·p_storage) / (p_in − p_read))"
+                "</small>"
+            ),
+        ])
+    except Exception as e:
+        cache_panel = mo.md(f"_Cache Gate computation error: {e}_")
+
+    # ── KV Capacity sub-panel ──
+    try:
+        kv_result = compute_kv_sizing(
+            n_layers=int(kv_n_layers.value),
+            n_kv_heads=int(kv_n_heads.value),
+            head_dim=int(kv_head_dim.value),
+            element_bytes=int(kv_element_bytes.value),
+            kv_pool_bytes=float(kv_pool_gb.value) * 1_000_000_000,
+            resident_tokens=int(kv_resident_tokens.value),
+            headroom_fraction=float(kv_headroom.value),
+            weight_bytes=float(kv_weight_gb.value) * 1_000_000_000,
+        )
+        if kv_result.context_length_at_weight_parity:
+            parity_text = (
+                f"weight-parity context length is "
+                f"**{kv_result.context_length_at_weight_parity:,}** tokens"
+            )
+        else:
+            parity_text = "weight-parity context length is **N/A**"
+        kv_panel = mo.vstack([
+            mo.hstack(
+                [kv_n_layers, kv_n_heads, kv_head_dim, kv_element_bytes],
+                justify="start",
+            ),
+            mo.hstack(
+                [kv_pool_gb, kv_resident_tokens, kv_headroom, kv_weight_gb],
+                justify="start",
+            ),
+            mo.md(
+                f"KV bytes/token: **{kv_result.kv_bytes_per_token:,.0f}**. "
+                f"Per-sequence KV memory: "
+                f"**{kv_result.total_kv_memory_per_seq / 1e9:.2f} GB**. "
+                f"Maximum concurrent live sequences: "
+                f"**{kv_result.max_live_sequences:,}** "
+                f"(after {kv_headroom.value:.0%} headroom). "
+                f"The {parity_text}."
+            ),
+            mo.md(
+                "<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
+                "Source: user inputs · Derivation 2 "
+                "(kv_bytes_per_token = 2·n_layers·n_kv_heads·head_dim·element_bytes)"
+                "</small>"
+            ),
+        ])
+    except Exception as e:
+        kv_panel = mo.md(f"_KV Capacity computation error: {e}_")
+
+    # ── Compose tabs (5 stubs are P2-T11.1-T11.5 follow-ups) ──
+    advanced_block = mo.vstack([
+        mo.md(f"## {MARIMO_VIEW_META[MarimoView.ADVANCED].label}"),
+        mo.md(
+            "Collapsible group of advanced analyses. Cache Gate and KV Capacity "
+            "are live; the remaining sub-tools are scheduled as P2-T11.1-T11.5 "
+            "follow-ups and currently render placeholders."
+        ),
+        mo.ui.tabs({
+            "Cache Gate": cache_panel,
+            "KV Capacity": kv_panel,
+            "Migration": mo.md(
+                "_Migration readiness scoring — TODO (P2-T11.1, port from "
+                "app.py:602-852)._"
+            ),
+            "RouteFit": mo.md(
+                "_RouteFit matrix — TODO (P2-T11.2)._"
+            ),
+            "Trace Schema": mo.md(
+                "_Trace event format reference — TODO (P2-T11.3)._"
+            ),
+            "Snapshots": mo.md(
+                "_Source pricing snapshots — TODO (P2-T11.4)._"
+            ),
+            "Operations": mo.md(
+                "_Operational views — TODO (P2-T11.5)._"
+            ),
+        }),
+    ])
+    advanced_block
+    return advanced_block
 
 
 if __name__ == "__main__":
