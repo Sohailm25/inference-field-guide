@@ -204,11 +204,85 @@ def _compare(mo, go, workload_dd, results, MARIMO_VIEW_META, MarimoView):
 
 # ── Sensitivity view (Task 7) ──
 @app.cell
-def _sensitivity(mo, MarimoView, PARAM_LABELS):
-    """Parameter sweep — to be implemented in Task 7."""
-    mo.md(f"# {MarimoView.SENSITIVITY.value} — TODO")
-    _ = PARAM_LABELS  # silence unused-import — wired in Task 7
-    return
+def _sensitivity(mo, PARAM_LABELS):
+    """Sensitivity view — input cell."""
+    param_choices = list(PARAM_LABELS.keys())
+    param_dd = mo.ui.dropdown(
+        options=param_choices,
+        value="retry_rate" if "retry_rate" in param_choices else param_choices[0],
+        label="Parameter to sweep",
+    )
+    return (param_dd,)
+
+
+@app.cell
+def _sensitivity_render(mo, go, calc, profile, replace, PARAM_LABELS, MarimoView, MARIMO_VIEW_META, param_dd):
+    """Render the sensitivity sparkline + verdict for the selected parameter."""
+    param = param_dd.value
+    human_label = PARAM_LABELS.get(param, param)
+
+    current = getattr(profile, param, None)
+    if current is None or current == 0:
+        sens_block = mo.vstack([
+            mo.md(f"## {MARIMO_VIEW_META[MarimoView.SENSITIVITY].label}"),
+            param_dd,
+            mo.md(f"_Parameter `{param}` not present on profile, or value is zero._"),
+        ])
+    else:
+        # Sweep ±50% in 9 steps
+        lo = max(current * 0.5, 0)
+        hi = current * 1.5
+        sweep = [lo + (hi - lo) * i / 8 for i in range(9)]
+
+        lcprs = []
+        for v in sweep:
+            sweep_profile = replace(profile, **{param: v})
+            results = calc.compare(sweep_profile)
+            cheapest = min(results, key=lambda r: r.lcpr).lcpr if results else 0
+            lcprs.append(cheapest)
+
+        fig = go.Figure()
+        fig.add_scatter(
+            x=sweep, y=lcprs, mode="lines+markers",
+            line=dict(color="#3A4F2A", width=2),
+            marker=dict(color="#5C2A1E", size=8),
+            hovertemplate=f"{human_label}: %{{x:.4f}}<br>LCPR: $%{{y:.4f}}<extra></extra>",
+        )
+        fig.add_scatter(
+            x=[current], y=[lcprs[4]], mode="markers",
+            marker=dict(color="#5C2A1E", size=14, symbol="x"),
+            hovertemplate=f"current {human_label}: %{{x:.4f}}<extra></extra>",
+            showlegend=False,
+        )
+        fig.update_layout(
+            plot_bgcolor="#faf5e9",
+            paper_bgcolor="#faf5e9",
+            font_family="Newsreader, Georgia, serif",
+            font_color="#1a1a1a",
+            xaxis=dict(title=f"{human_label}", gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11)),
+            yaxis=dict(title="LCPR ($)", gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11)),
+            margin=dict(t=10, b=50, l=60, r=20),
+            height=400,
+            showlegend=False,
+        )
+
+        delta = lcprs[-1] - lcprs[0]
+        direction = "increases" if delta > 0 else ("decreases" if delta < 0 else "is flat at")
+        pct = abs(delta / lcprs[4]) * 100 if lcprs[4] else 0
+        verdict = mo.md(
+            f"As **{human_label}** sweeps from `{lo:.4f}` to `{hi:.4f}`, LCPR {direction} by "
+            f"**${abs(delta):.4f}** (**{pct:.1f}%** of current). "
+            f"The current value `{current:.4f}` is marked with an `×`."
+        )
+
+        sens_block = mo.vstack([
+            mo.md(f"## {MARIMO_VIEW_META[MarimoView.SENSITIVITY].label}"),
+            param_dd,
+            verdict,
+            mo.ui.plotly(fig),
+        ])
+    sens_block
+    return sens_block
 
 
 # ── Break-Even view (Task 8) ──
