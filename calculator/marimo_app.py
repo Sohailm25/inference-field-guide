@@ -599,10 +599,120 @@ def _goodput_render(
 
 # ── Trace-to-Margin view (Task 10) ──
 @app.cell
-def _trace_to_margin(mo, MarimoView):
-    """Reconcile traces to invoice — to be implemented in Task 10."""
-    mo.md(f"# {MarimoView.TRACE_TO_MARGIN.value} — TODO")
-    return
+def _trace_to_margin_inputs(mo):
+    """Input controls for the Trace-to-Margin view.
+
+    Field names match the real compute_trace_to_margin signature
+    (trace_cost, invoice_amount, …, revenue_per_unit) — Derivation 6.
+    """
+    ttm_attempts = mo.ui.number(
+        value=100000, start=1, step=1000, label="Total attempts/month",
+    )
+    ttm_accepted = mo.ui.number(
+        value=82000, start=1, step=1000, label="Accepted units/month",
+    )
+    ttm_trace_cost = mo.ui.number(
+        value=14200.0, start=0.0, step=100.0, label="Raw trace cost ($)",
+    )
+    ttm_invoice = mo.ui.number(
+        value=15050.0, start=0.0, step=100.0, label="Invoice amount ($)",
+    )
+    ttm_eval_cost = mo.ui.number(
+        value=620.0, start=0.0, step=50.0, label="Eval cost ($)",
+    )
+    ttm_human_cost = mo.ui.number(
+        value=1840.0, start=0.0, step=100.0, label="Human escalation cost ($)",
+    )
+    ttm_ops_cost = mo.ui.number(
+        value=720.0, start=0.0, step=50.0, label="Ops cost ($)",
+    )
+    ttm_revenue_per_unit = mo.ui.number(
+        value=0.30, start=0.0, step=0.01, label="Revenue per accepted unit ($)",
+    )
+    return (
+        ttm_attempts, ttm_accepted, ttm_trace_cost, ttm_invoice,
+        ttm_eval_cost, ttm_human_cost, ttm_ops_cost, ttm_revenue_per_unit,
+    )
+
+
+@app.cell
+def _trace_to_margin(
+    mo, compute_trace_to_margin,
+    ttm_attempts, ttm_accepted, ttm_trace_cost, ttm_invoice,
+    ttm_eval_cost, ttm_human_cost, ttm_ops_cost, ttm_revenue_per_unit,
+    MARIMO_VIEW_META, MarimoView,
+):
+    """Reconcile raw traces to loaded cost and gross margin (Derivation 6).
+
+    Adapted from plan: real signature uses trace_cost + invoice_amount
+    (delta is computed internally), and result exposes total_loaded_cost,
+    gross_margin, gross_margin_pct, lcpr_to_naive_ratio (not the plan's
+    speculative names). Prose verdict first; cost breakdown in expander
+    (spec §9.1 step 7).
+    """
+    try:
+        result = compute_trace_to_margin(
+            trace_cost=float(ttm_trace_cost.value),
+            invoice_amount=float(ttm_invoice.value),
+            eval_cost=float(ttm_eval_cost.value),
+            human_cost=float(ttm_human_cost.value),
+            ops_cost=float(ttm_ops_cost.value),
+            total_attempts=int(ttm_attempts.value),
+            accepted_units=int(ttm_accepted.value),
+            revenue_per_unit=float(ttm_revenue_per_unit.value),
+        )
+
+        verdict = mo.md(
+            f"LCPR is **${result.lcpr:.4f}** per accepted unit. Gross margin "
+            f"is **${result.gross_margin:,.2f}** "
+            f"(**{result.gross_margin_pct:.1%}** of revenue). The loaded-to-naive "
+            f"ratio is **{result.lcpr_to_naive_ratio:.2f}×** — naive trace cost "
+            f"per attempt was **${result.naive_cost_per_unit:.4f}**."
+        )
+
+        details = mo.accordion({
+            "Cost breakdown": mo.md(
+                f"- Raw trace cost: **${result.trace_cost:,.2f}**\n"
+                f"- Invoice amount: **${result.invoice_amount:,.2f}** "
+                f"(invoice − trace delta: **${result.delta:,.2f}**)\n"
+                f"- Eval cost: **${result.eval_cost:,.2f}**\n"
+                f"- Human escalation: **${result.human_cost:,.2f}**\n"
+                f"- Ops cost: **${result.ops_cost:,.2f}**\n"
+                f"- **Total loaded cost: ${result.total_loaded_cost:,.2f}**\n"
+                f"- Accepted units: **{result.accepted_units:,}**\n"
+                f"- Revenue: **${result.revenue:,.2f}** "
+                f"(@ ${ttm_revenue_per_unit.value:.4f}/unit)"
+            ),
+        })
+
+        caption = mo.md(
+            f"<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
+            f"Source: user inputs · Derivation 6 "
+            f"(LCPR = loaded_cost / accepted_units)</small>"
+        )
+
+        ttm_block = mo.vstack([
+            mo.md(f"## {MARIMO_VIEW_META[MarimoView.TRACE_TO_MARGIN].label}"),
+            mo.hstack(
+                [ttm_attempts, ttm_accepted, ttm_revenue_per_unit],
+                justify="start",
+            ),
+            mo.hstack(
+                [ttm_trace_cost, ttm_invoice, ttm_eval_cost],
+                justify="start",
+            ),
+            mo.hstack(
+                [ttm_human_cost, ttm_ops_cost],
+                justify="start",
+            ),
+            verdict,
+            details,
+            caption,
+        ])
+    except Exception as e:
+        ttm_block = mo.md(f"_Trace-to-margin computation error: {e}_")
+    ttm_block
+    return ttm_block
 
 
 # ── Advanced view (Task 11) ──
