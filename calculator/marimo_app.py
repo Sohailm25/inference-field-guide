@@ -38,10 +38,12 @@ def _imports():
 
 @app.cell
 def _pricing(Path, yaml, LCPRCalculator):
-    """Load pricing data once at app start."""
+    """Load pricing data once at app start. LCPRCalculator takes a Path,
+    not a loaded dict (see lcpr.py:711). The raw pricing dict is also
+    returned for views that need direct yaml access."""
     pricing_path = Path(__file__).parent / "provider_pricing.yaml"
+    calc = LCPRCalculator(pricing_path)
     pricing = yaml.safe_load(pricing_path.read_text())
-    calc = LCPRCalculator(pricing)
     return calc, pricing
 
 

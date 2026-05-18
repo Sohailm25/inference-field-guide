@@ -33,12 +33,10 @@ def test_marimo_app_lcpr_parity_with_lcpr_module():
     """
     from calculator.lcpr import LCPRCalculator
     from calculator.workload_profiles import get_profile
-    import yaml
     from pathlib import Path
 
     pricing_path = Path(__file__).parent.parent / "provider_pricing.yaml"
-    pricing = yaml.safe_load(pricing_path.read_text())
-    calc = LCPRCalculator(pricing)
+    calc = LCPRCalculator(pricing_path)
     profile = get_profile("saas_chat")
     direct = calc.compare(profile)
     assert direct, "lcpr.py returned no comparison results for saas_chat profile"
