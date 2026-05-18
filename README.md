@@ -21,26 +21,27 @@ The Loaded Cost Per Result (LCPR) calculator computes true cost per accepted wor
 
 ### Interactive App
 
-[inference-econ.streamlit.app](https://inference-econ.streamlit.app)
+**Live (Marimo, recommended):** [sohailmo.ai/book/calculator/](https://sohailmo.ai/book/calculator/) — companion calculator for the book, deployed under the unified-publication URL.
 
-Core tabs:
+**Local dev:**
+```bash
+.venv/bin/marimo run calculator/marimo_app.py    # edit mode
+.venv/bin/python scripts/build_marimo_to_book.py  # WASM build + copy to book repo
+```
 
-1. Start Here — landing page with LCPR definition, glossary, and suggested workflow
-2. Compare — LCPR comparison across providers
-3. Sensitivity — parameter sweep to find dominant cost lever
-4. Break-Even — dedicated vs serverless crossover volume
-5. Migration — readiness scoring and timeline estimate
+**Legacy (Streamlit, deprecated):** `inference-econ.streamlit.app` now serves a redirect page pointing at the new URL. The legacy app source survives at `calculator/app.py.LEGACY` for reference.
 
-Advanced Tools (collapsed by default):
+**7 views** (collapsed from the legacy 13-tab Streamlit app):
 
-1. Goodput — accepted requests/sec under SLO
-2. Trace-to-Margin — reconcile traces to invoice
-3. Cache Gate — cache break-even reuse count
-4. KV Capacity — concurrent sequence limits
-5. RouteFit — provider-workload fit matrix
-6. Trace Schema — trace event format reference
-7. Snapshots — source pricing snapshots
-8. Operations — spend, commitment, and variance views
+1. **Landing** — Mad-libs sentence wired to a default workload; one-paragraph verdict
+2. **Compare** — LCPR comparison across providers + deployments
+3. **Sensitivity** — parameter sweep to find dominant cost lever
+4. **Break-Even** — dedicated vs serverless crossover daily-volume
+5. **Goodput** — accepted req/s under latency + quality SLOs (Derivation 5)
+6. **Trace-to-Margin** — reconcile raw traces to invoice + revenue (Derivation 6)
+7. **Advanced** — collapsible group: Cache Gate · KV Capacity · Migration · RouteFit · Trace Schema · Snapshots · Operations
+
+The new visual design (moss + oxblood on parchment, Newsreader serif + JetBrains Mono) matches the book's broadsheet aesthetic — see `history/2026-05-18-phase2-calculator-marimo-migration.md` for the migration plan and `/Users/sohailmo/Documents/Sohailm25.github.io/history/2026-05-18-book-calculator-uiux-design.md` for the unified-publication design spec.
 
 ### CLI
 
