@@ -549,7 +549,7 @@ def _tab_breakeven(calc: LCPRCalculator) -> None:
             x=be_m, y=ded_daily,
             text=f"Break-even: {be_m:.1f}M tokens/day",
             showarrow=True, arrowhead=2,
-            font=dict(color="#e8e8e8"),
+            font=dict(color="#1a1a1a"),
         )
     else:
         # Capacity limit annotation
@@ -559,7 +559,7 @@ def _tab_breakeven(calc: LCPRCalculator) -> None:
             x=cap_m, y=ded_daily,
             text=f"GPU capacity: {cap_m:.1f}M tokens/day",
             showarrow=True, arrowhead=2,
-            font=dict(color="#e8e8e8"),
+            font=dict(color="#1a1a1a"),
         )
 
     # Your volume marker
