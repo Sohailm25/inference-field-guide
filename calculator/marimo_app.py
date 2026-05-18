@@ -48,19 +48,18 @@ def _pricing(Path, yaml, LCPRCalculator):
 
 
 @app.cell
-def _theme_css(mo):
+def _theme_css(mo, Path):
     """Inject palette + typography (moss/oxblood + Newsreader/JBMono).
     Loads marimo-theme.css from the static/ directory so the Marimo chrome
     inherits the book design.
     """
-    mo.Html("""
+    _css_path = Path(__file__).parent / "static" / "marimo-theme.css"
+    _css_text = _css_path.read_text() if _css_path.exists() else ""
+    mo.Html(f"""
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href='https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap' rel='stylesheet'>
-    <style>
-      /* placeholder — full theme will move to calculator/static/marimo-theme.css in Task 17 */
-      body { background: #faf5e9; color: #1a1a1a; font-family: 'Newsreader', Georgia, serif; }
-    </style>
+    <style>{_css_text}</style>
     """)
     return
 
