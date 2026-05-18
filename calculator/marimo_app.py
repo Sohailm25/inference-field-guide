@@ -287,10 +287,174 @@ def _sensitivity_render(mo, go, calc, profile, replace, PARAM_LABELS, MarimoView
 
 # ── Break-Even view (Task 8) ──
 @app.cell
-def _break_even(mo, MarimoView):
-    """Crossover analysis — to be implemented in Task 8."""
-    mo.md(f"# {MarimoView.BREAK_EVEN.value} — TODO")
-    return
+def _break_even_inputs(mo, calc):
+    """Break-Even input cell — choose serverless vs dedicated provider + daily volume."""
+    serverless_providers = [
+        p for p in calc.providers if p.deployment_mode in ("serverless_open", "closed_api")
+    ]
+    dedicated_providers = [p for p in calc.providers if p.deployment_mode == "dedicated"]
+
+    serverless_names = [p.name for p in serverless_providers]
+    dedicated_names = [p.name for p in dedicated_providers]
+
+    serverless_dd = mo.ui.dropdown(
+        options=serverless_names,
+        value="Together AI Llama 3.3 70B" if "Together AI Llama 3.3 70B" in serverless_names else serverless_names[0],
+        label="serverless option",
+    )
+    dedicated_dd = mo.ui.dropdown(
+        options=dedicated_names,
+        value="Together AI H100 80GB" if "Together AI H100 80GB" in dedicated_names else dedicated_names[0],
+        label="dedicated option",
+    )
+    daily_tokens_input = mo.ui.number(
+        value=10.0, start=0.1, stop=10000.0, step=1.0,
+        label="your daily output (millions of tokens)",
+    )
+    return (
+        serverless_dd, dedicated_dd, daily_tokens_input,
+        serverless_providers, dedicated_providers,
+    )
+
+
+@app.cell
+def _break_even_render(
+    mo, go, calc, compute_break_even,
+    serverless_dd, dedicated_dd, daily_tokens_input,
+    MARIMO_VIEW_META, MarimoView,
+):
+    """Render the break-even crossover chart + verdict.
+
+    Adapted from plan: real compute_break_even signature is
+    (serverless: ProviderPricing, dedicated: ProviderPricing) -> BreakEvenResult.
+    We pick providers from the catalog rather than a free-form $/hr input.
+    """
+    try:
+        serverless = next(p for p in calc.providers if p.name == serverless_dd.value)
+        dedicated = next(p for p in calc.providers if p.name == dedicated_dd.value)
+        be = compute_break_even(serverless, dedicated)
+
+        user_daily_m = daily_tokens_input.value
+        serverless_rate_per_m = serverless.output_rate_per_m  # $/M output tokens
+        # Per-day dedicated cost is fixed (GPU $/hr × 24); per-token rate decreases with volume.
+        dedicated_daily = be.dedicated_daily_cost
+        user_serverless_cost = user_daily_m * serverless_rate_per_m
+
+        if not be.break_even_feasible:
+            verdict_text = (
+                f"At any volume, **{serverless.name}** (serverless) is cheaper than "
+                f"**{dedicated.name}** at the stated utilization "
+                f"(`{dedicated.utilization * 100:.0f}%`). "
+                f"Dedicated effective cost is **${be.effective_cost_per_m:.4f}/M** vs "
+                f"serverless **${serverless_rate_per_m:.4f}/M**. "
+                f"You'd need utilization ≥ **{be.required_utilization * 100:.1f}%** to break even."
+            )
+            recommendation = "Serverless"
+        else:
+            crossover_m = be.break_even_daily_output_tokens / 1_000_000
+            if user_daily_m >= crossover_m:
+                recommendation = "Dedicated GPU"
+                # Daily $ saved by switching to dedicated at this volume.
+                savings = user_serverless_cost - dedicated_daily
+                verdict_text = (
+                    f"At **{user_daily_m:.1f}M tokens/day**, **{dedicated.name}** is cheaper. "
+                    f"Estimated daily savings vs **{serverless.name}**: **${savings:,.2f}**. "
+                    f"Crossover at **{crossover_m:.2f}M tokens/day**."
+                )
+            else:
+                recommendation = "Serverless"
+                verdict_text = (
+                    f"At **{user_daily_m:.1f}M tokens/day**, **{serverless.name}** is cheaper. "
+                    f"You'd need **{crossover_m:.2f}M tokens/day** to justify "
+                    f"**{dedicated.name}** at **${dedicated.gpu_hourly_rate:.2f}/hr** and "
+                    f"`{dedicated.utilization * 100:.0f}%` utilization."
+                )
+
+        # Sweep daily-token range for the crossover plot. Anchor around the
+        # crossover if feasible; otherwise anchor around the user's volume.
+        if be.break_even_feasible:
+            anchor = be.break_even_daily_output_tokens / 1_000_000
+        else:
+            anchor = max(user_daily_m, 1.0)
+        sweep = [max(anchor * f, 0.01) for f in (0.1, 0.3, 0.6, 1.0, 1.4, 1.8, 2.5)]
+        # Always include the user's volume in the sweep so the cost lines pass through it.
+        sweep = sorted(set(sweep + [user_daily_m]))
+
+        sweep_cost_serverless = [v * serverless_rate_per_m for v in sweep]
+        sweep_cost_dedicated = [dedicated_daily for _ in sweep]  # flat: fixed daily GPU cost
+
+        fig = go.Figure()
+        fig.add_scatter(
+            x=sweep, y=sweep_cost_dedicated,
+            name=f"Dedicated ({dedicated.name})",
+            line=dict(color="#3A4F2A", width=2),
+            hovertemplate="%{x:.2f}M tok/day<br>$%{y:,.2f}/day<extra>Dedicated</extra>",
+        )
+        fig.add_scatter(
+            x=sweep, y=sweep_cost_serverless,
+            name=f"Serverless ({serverless.name})",
+            line=dict(color="#5C2A1E", width=2),
+            hovertemplate="%{x:.2f}M tok/day<br>$%{y:,.2f}/day<extra>Serverless</extra>",
+        )
+        # Mark the user's current volume.
+        user_y = dedicated_daily if recommendation == "Dedicated GPU" else user_serverless_cost
+        fig.add_scatter(
+            x=[user_daily_m], y=[user_y],
+            mode="markers",
+            marker=dict(color="#1a1a1a", size=14, symbol="x"),
+            name="Your volume",
+            showlegend=False,
+            hovertemplate=f"your volume: %{{x:.1f}}M tok/day<br>$%{{y:,.2f}}/day<extra></extra>",
+        )
+        fig.update_layout(
+            plot_bgcolor="#faf5e9", paper_bgcolor="#faf5e9",
+            font_family="Newsreader, Georgia, serif", font_color="#1a1a1a",
+            xaxis=dict(
+                title="Daily output (millions of tokens)",
+                gridcolor="#e0d8c0",
+                tickfont=dict(family="JetBrains Mono", size=11),
+            ),
+            yaxis=dict(
+                title="Daily $",
+                gridcolor="#e0d8c0",
+                tickfont=dict(family="JetBrains Mono", size=11),
+            ),
+            margin=dict(t=10, b=50, l=70, r=20),
+            height=400,
+            legend=dict(x=0.02, y=0.98, bgcolor="rgba(250,245,233,0.8)"),
+        )
+
+        verdict = mo.md(verdict_text)
+        crossover_str = (
+            f"**{be.break_even_daily_output_tokens / 1_000_000:.2f}M tokens/day**"
+            if be.break_even_feasible else "**not reachable at this utilization**"
+        )
+        details = mo.accordion({
+            "Details": mo.md(
+                f"- Recommendation at your volume: **{recommendation}**\n"
+                f"- Serverless rate: **${serverless_rate_per_m:.4f}/M output tokens**\n"
+                f"- Dedicated effective rate: **${be.effective_cost_per_m:.4f}/M output tokens** "
+                f"(at `{dedicated.utilization * 100:.0f}%` utilization)\n"
+                f"- Dedicated daily cost: **${dedicated_daily:,.2f}/day** "
+                f"(${dedicated.gpu_hourly_rate:.2f}/hr × 24)\n"
+                f"- Effective dedicated capacity: "
+                f"**{be.effective_capacity_tokens_per_day / 1_000_000:.2f}M tokens/day**\n"
+                f"- Crossover volume: {crossover_str}\n"
+                f"- Required utilization for break-even: "
+                f"**{be.required_utilization * 100:.1f}%**"
+            ),
+        })
+        be_block = mo.vstack([
+            mo.md(f"## {MARIMO_VIEW_META[MarimoView.BREAK_EVEN].label}"),
+            mo.hstack([serverless_dd, dedicated_dd, daily_tokens_input], justify="start"),
+            verdict,
+            mo.ui.plotly(fig),
+            details,
+        ])
+    except Exception as e:
+        be_block = mo.md(f"_Break-even computation error: {e}_")
+    be_block
+    return be_block
 
 
 # ── Goodput view (Task 9) ──
