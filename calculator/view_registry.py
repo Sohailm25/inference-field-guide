@@ -333,11 +333,8 @@ PARAM_LABELS: dict[str, str] = {
     "retry_rate": "Retry rate",
     "quality_gate_pass_rate": "Quality gate pass rate",
     "cache_hit_rate": "Cache hit rate",
-    "batch_fraction": "Batch fraction",
+    "batch_eligible_fraction": "Batch-eligible fraction",
     "monthly_requests": "Monthly requests",
     "avg_input_tokens": "Avg input tokens",
     "avg_output_tokens": "Avg output tokens",
-    "schema_failure_rate": "Schema-failure rate",
-    "escalation_rate": "Escalation rate",
-    "ops_cost_per_request": "Ops cost per request",
 }
