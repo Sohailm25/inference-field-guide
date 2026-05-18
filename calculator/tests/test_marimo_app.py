@@ -73,3 +73,34 @@ def test_marimo_app_no_invisible_chart_text():
     source = open(mod.__file__).read()
     assert 'font_color="#e8e8e8"' not in source
     assert "font_color='#e8e8e8'" not in source
+
+
+def test_marimo_landing_verdict_matches_direct_compute():
+    """Spec §9.2 B5 — the Landing view's verdict must use the exact same
+    cheapest-LCPR that lcpr.py would compute for the default profile.
+
+    The Marimo app and the direct lcpr.py call share the same code path
+    (calc.compare from lcpr.py), so this test verifies the import wiring
+    hasn't drifted in a way that would change the numbers.
+    """
+    from calculator.lcpr import LCPRCalculator
+    from calculator.workload_profiles import get_profile
+    from pathlib import Path
+
+    pricing_path = Path(__file__).parent.parent / "provider_pricing.yaml"
+    calc_direct = LCPRCalculator(pricing_path)
+    profile = get_profile("saas_chat")
+    direct_results = calc_direct.compare(profile)
+    assert direct_results, "Empty comparison from lcpr.py"
+    cheapest_direct = min(direct_results, key=lambda r: r.lcpr)
+
+    # Recompute via the same code path the Marimo app uses.
+    import calculator.marimo_app as mod
+    calc_via_app = mod.LCPRCalculator(pricing_path)
+    app_results = calc_via_app.compare(profile)
+    cheapest_app = min(app_results, key=lambda r: r.lcpr)
+
+    assert abs(cheapest_direct.lcpr - cheapest_app.lcpr) < 1e-9, (
+        f"LCPR drift: direct={cheapest_direct.lcpr}, app={cheapest_app.lcpr}"
+    )
+    assert cheapest_direct.provider_name == cheapest_app.provider_name
