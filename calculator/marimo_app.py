@@ -99,35 +99,35 @@ def _landing_render(mo, MARIMO_VIEW_META, MarimoView, workload_dd, filter_dd, ca
     """
     profile = get_profile(workload_dd.value)
     results = calc.compare(profile)
-    sorted_results = sorted(results, key=lambda r: r.lcpr)
-    cheapest = sorted_results[0] if sorted_results else None
-    second = sorted_results[1] if len(sorted_results) > 1 else None
+    _sorted_results = sorted(results, key=lambda r: r.lcpr)
+    cheapest = _sorted_results[0] if _sorted_results else None
+    _second = _sorted_results[1] if len(_sorted_results) > 1 else None
 
-    sentence = mo.md(
+    _sentence = mo.md(
         f"I want to serve **Llama 3.1 8B** for **{workload_dd.value}**, "
         f"expecting **{profile.avg_input_tokens:,} in / {profile.avg_output_tokens:,} out** "
         f"tokens per call. Show me LCPR across **{filter_dd.value}**."
     )
 
-    if cheapest and second:
-        verdict = mo.md(
+    if cheapest and _second:
+        _verdict = mo.md(
             f"At your volume, **{cheapest.provider_name}** is cheapest at LCPR "
-            f"**${cheapest.lcpr:.4f}** vs. **{second.provider_name}** at LCPR "
-            f"**${second.lcpr:.4f}**. See the **Compare** view for the full table."
+            f"**${cheapest.lcpr:.4f}** vs. **{_second.provider_name}** at LCPR "
+            f"**${_second.lcpr:.4f}**. See the **Compare** view for the full table."
         )
     elif cheapest:
-        verdict = mo.md(
+        _verdict = mo.md(
             f"At your volume, **{cheapest.provider_name}** is the only matching config "
             f"at LCPR **${cheapest.lcpr:.4f}**."
         )
     else:
-        verdict = mo.md("_No matching configurations for this filter._")
+        _verdict = mo.md("_No matching configurations for this filter._")
 
     landing_block = mo.vstack([
         mo.md(f"# Production Inference Economics — {MARIMO_VIEW_META[MarimoView.LANDING].label}"),
         mo.hstack([workload_dd, filter_dd], justify="start"),
-        sentence,
-        verdict,
+        _sentence,
+        _verdict,
         mo.accordion({
             "Terminology": mo.md(
                 "**LCPR** — Loaded Cost Per Result. The cost per *accepted* unit of work, "
@@ -149,25 +149,25 @@ def _compare(mo, go, workload_dd, results, MARIMO_VIEW_META, MarimoView):
     if not results:
         compare_block = mo.md(f"## {MARIMO_VIEW_META[MarimoView.COMPARE].label}\n\n_No matching results._")
     else:
-        sorted_results = sorted(results, key=lambda r: r.lcpr)
+        _sorted_results = sorted(results, key=lambda r: r.lcpr)
 
         # Plotly bar chart, moss + oxblood palette per book.css
-        deploy_color = {
+        _deploy_color = {
             "closed_api": "#5C2A1E",       # oxblood — closed API
             "serverless_open": "#3A4F2A",  # moss — serverless open
             "dedicated": "#7a8a5a",        # moss-light — dedicated
         }
 
-        fig = go.Figure()
-        for r in sorted_results:
-            fig.add_bar(
+        _fig = go.Figure()
+        for r in _sorted_results:
+            _fig.add_bar(
                 x=[f"{r.provider_name} · {r.deployment_mode}"],
                 y=[r.lcpr],
-                marker_color=deploy_color.get(r.deployment_mode, "#3A4F2A"),
+                marker_color=_deploy_color.get(r.deployment_mode, "#3A4F2A"),
                 showlegend=False,
                 hovertemplate=f"<b>{r.provider_name}</b><br>LCPR: $%{{y:.4f}}<extra>{r.deployment_mode}</extra>",
             )
-        fig.update_layout(
+        _fig.update_layout(
             plot_bgcolor="#faf5e9",
             paper_bgcolor="#faf5e9",
             font_family="Newsreader, Iowan Old Style, Georgia, serif",
@@ -180,23 +180,23 @@ def _compare(mo, go, workload_dd, results, MARIMO_VIEW_META, MarimoView):
 
         # Prose verdict above the chart. WorkloadProfile has no .name attribute,
         # so we use workload_dd.value (the profile key string) for display.
-        cheapest = sorted_results[0]
-        verdict = mo.md(
-            f"**{cheapest.provider_name} ({cheapest.deployment_mode})** is the lowest loaded cost per accepted result "
-            f"at **${cheapest.lcpr:.4f}** for your `{workload_dd.value}` profile."
+        _cheapest = _sorted_results[0]
+        _verdict = mo.md(
+            f"**{_cheapest.provider_name} ({_cheapest.deployment_mode})** is the lowest loaded cost per accepted result "
+            f"at **${_cheapest.lcpr:.4f}** for your `{workload_dd.value}` profile."
         )
 
         # Source caption
-        caption = mo.md(
+        _caption = mo.md(
             f"<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
             f"Source: provider pricing snapshot · Derivation 1</small>"
         )
 
         compare_block = mo.vstack([
             mo.md(f"## {MARIMO_VIEW_META[MarimoView.COMPARE].label}"),
-            verdict,
-            mo.ui.plotly(fig),
-            caption,
+            _verdict,
+            mo.ui.plotly(_fig),
+            _caption,
         ])
     compare_block
     return compare_block
@@ -218,68 +218,68 @@ def _sensitivity(mo, PARAM_LABELS):
 @app.cell
 def _sensitivity_render(mo, go, calc, profile, replace, PARAM_LABELS, MarimoView, MARIMO_VIEW_META, param_dd):
     """Render the sensitivity sparkline + verdict for the selected parameter."""
-    param = param_dd.value
-    human_label = PARAM_LABELS.get(param, param)
+    _param = param_dd.value
+    _human_label = PARAM_LABELS.get(_param, _param)
 
-    current = getattr(profile, param, None)
-    if current is None or current == 0:
+    _current = getattr(profile, _param, None)
+    if _current is None or _current == 0:
         sens_block = mo.vstack([
             mo.md(f"## {MARIMO_VIEW_META[MarimoView.SENSITIVITY].label}"),
             param_dd,
-            mo.md(f"_Parameter `{param}` not present on profile, or value is zero._"),
+            mo.md(f"_Parameter `{_param}` not present on profile, or value is zero._"),
         ])
     else:
         # Sweep ±50% in 9 steps
-        lo = max(current * 0.5, 0)
-        hi = current * 1.5
-        sweep = [lo + (hi - lo) * i / 8 for i in range(9)]
+        _lo = max(_current * 0.5, 0)
+        _hi = _current * 1.5
+        _sweep = [_lo + (_hi - _lo) * i / 8 for i in range(9)]
 
-        lcprs = []
-        for v in sweep:
-            sweep_profile = replace(profile, **{param: v})
-            results = calc.compare(sweep_profile)
-            cheapest = min(results, key=lambda r: r.lcpr).lcpr if results else 0
-            lcprs.append(cheapest)
+        _lcprs = []
+        for v in _sweep:
+            _sweep_profile = replace(profile, **{_param: v})
+            _results = calc.compare(_sweep_profile)
+            _cheapest = min(_results, key=lambda r: r.lcpr).lcpr if _results else 0
+            _lcprs.append(_cheapest)
 
-        fig = go.Figure()
-        fig.add_scatter(
-            x=sweep, y=lcprs, mode="lines+markers",
+        _fig = go.Figure()
+        _fig.add_scatter(
+            x=_sweep, y=_lcprs, mode="lines+markers",
             line=dict(color="#3A4F2A", width=2),
             marker=dict(color="#5C2A1E", size=8),
-            hovertemplate=f"{human_label}: %{{x:.4f}}<br>LCPR: $%{{y:.4f}}<extra></extra>",
+            hovertemplate=f"{_human_label}: %{{x:.4f}}<br>LCPR: $%{{y:.4f}}<extra></extra>",
         )
-        fig.add_scatter(
-            x=[current], y=[lcprs[4]], mode="markers",
+        _fig.add_scatter(
+            x=[_current], y=[_lcprs[4]], mode="markers",
             marker=dict(color="#5C2A1E", size=14, symbol="x"),
-            hovertemplate=f"current {human_label}: %{{x:.4f}}<extra></extra>",
+            hovertemplate=f"current {_human_label}: %{{x:.4f}}<extra></extra>",
             showlegend=False,
         )
-        fig.update_layout(
+        _fig.update_layout(
             plot_bgcolor="#faf5e9",
             paper_bgcolor="#faf5e9",
             font_family="Newsreader, Georgia, serif",
             font_color="#1a1a1a",
-            xaxis=dict(title=f"{human_label}", gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11)),
+            xaxis=dict(title=f"{_human_label}", gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11)),
             yaxis=dict(title="LCPR ($)", gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11)),
             margin=dict(t=10, b=50, l=60, r=20),
             height=400,
             showlegend=False,
         )
 
-        delta = lcprs[-1] - lcprs[0]
-        direction = "increases" if delta > 0 else ("decreases" if delta < 0 else "is flat at")
-        pct = abs(delta / lcprs[4]) * 100 if lcprs[4] else 0
-        verdict = mo.md(
-            f"As **{human_label}** sweeps from `{lo:.4f}` to `{hi:.4f}`, LCPR {direction} by "
-            f"**${abs(delta):.4f}** (**{pct:.1f}%** of current). "
-            f"The current value `{current:.4f}` is marked with an `×`."
+        _delta = _lcprs[-1] - _lcprs[0]
+        _direction = "increases" if _delta > 0 else ("decreases" if _delta < 0 else "is flat at")
+        _pct = abs(_delta / _lcprs[4]) * 100 if _lcprs[4] else 0
+        _verdict = mo.md(
+            f"As **{_human_label}** sweeps from `{_lo:.4f}` to `{_hi:.4f}`, LCPR {_direction} by "
+            f"**${abs(_delta):.4f}** (**{_pct:.1f}%** of current). "
+            f"The current value `{_current:.4f}` is marked with an `×`."
         )
 
         sens_block = mo.vstack([
             mo.md(f"## {MARIMO_VIEW_META[MarimoView.SENSITIVITY].label}"),
             param_dd,
-            verdict,
-            mo.ui.plotly(fig),
+            _verdict,
+            mo.ui.plotly(_fig),
         ])
     sens_block
     return sens_block
@@ -330,83 +330,83 @@ def _break_even_render(
     We pick providers from the catalog rather than a free-form $/hr input.
     """
     try:
-        serverless = next(p for p in calc.providers if p.name == serverless_dd.value)
-        dedicated = next(p for p in calc.providers if p.name == dedicated_dd.value)
-        be = compute_break_even(serverless, dedicated)
+        _serverless = next(p for p in calc.providers if p.name == serverless_dd.value)
+        _dedicated = next(p for p in calc.providers if p.name == dedicated_dd.value)
+        _be = compute_break_even(_serverless, _dedicated)
 
-        user_daily_m = daily_tokens_input.value
-        serverless_rate_per_m = serverless.output_rate_per_m  # $/M output tokens
+        _user_daily_m = daily_tokens_input.value
+        _serverless_rate_per_m = _serverless.output_rate_per_m  # $/M output tokens
         # Per-day dedicated cost is fixed (GPU $/hr × 24); per-token rate decreases with volume.
-        dedicated_daily = be.dedicated_daily_cost
-        user_serverless_cost = user_daily_m * serverless_rate_per_m
+        _dedicated_daily = _be.dedicated_daily_cost
+        _user_serverless_cost = _user_daily_m * _serverless_rate_per_m
 
-        if not be.break_even_feasible:
-            verdict_text = (
-                f"At any volume, **{serverless.name}** (serverless) is cheaper than "
-                f"**{dedicated.name}** at the stated utilization "
-                f"(`{dedicated.utilization * 100:.0f}%`). "
-                f"Dedicated effective cost is **${be.effective_cost_per_m:.4f}/M** vs "
-                f"serverless **${serverless_rate_per_m:.4f}/M**. "
-                f"You'd need utilization ≥ **{be.required_utilization * 100:.1f}%** to break even."
+        if not _be.break_even_feasible:
+            _verdict_text = (
+                f"At any volume, **{_serverless.name}** (serverless) is cheaper than "
+                f"**{_dedicated.name}** at the stated utilization "
+                f"(`{_dedicated.utilization * 100:.0f}%`). "
+                f"Dedicated effective cost is **${_be.effective_cost_per_m:.4f}/M** vs "
+                f"serverless **${_serverless_rate_per_m:.4f}/M**. "
+                f"You'd need utilization ≥ **{_be.required_utilization * 100:.1f}%** to break even."
             )
-            recommendation = "Serverless"
+            _recommendation = "Serverless"
         else:
-            crossover_m = be.break_even_daily_output_tokens / 1_000_000
-            if user_daily_m >= crossover_m:
-                recommendation = "Dedicated GPU"
+            _crossover_m = _be.break_even_daily_output_tokens / 1_000_000
+            if _user_daily_m >= _crossover_m:
+                _recommendation = "Dedicated GPU"
                 # Daily $ saved by switching to dedicated at this volume.
-                savings = user_serverless_cost - dedicated_daily
-                verdict_text = (
-                    f"At **{user_daily_m:.1f}M tokens/day**, **{dedicated.name}** is cheaper. "
-                    f"Estimated daily savings vs **{serverless.name}**: **${savings:,.2f}**. "
-                    f"Crossover at **{crossover_m:.2f}M tokens/day**."
+                _savings = _user_serverless_cost - _dedicated_daily
+                _verdict_text = (
+                    f"At **{_user_daily_m:.1f}M tokens/day**, **{_dedicated.name}** is cheaper. "
+                    f"Estimated daily savings vs **{_serverless.name}**: **${_savings:,.2f}**. "
+                    f"Crossover at **{_crossover_m:.2f}M tokens/day**."
                 )
             else:
-                recommendation = "Serverless"
-                verdict_text = (
-                    f"At **{user_daily_m:.1f}M tokens/day**, **{serverless.name}** is cheaper. "
-                    f"You'd need **{crossover_m:.2f}M tokens/day** to justify "
-                    f"**{dedicated.name}** at **${dedicated.gpu_hourly_rate:.2f}/hr** and "
-                    f"`{dedicated.utilization * 100:.0f}%` utilization."
+                _recommendation = "Serverless"
+                _verdict_text = (
+                    f"At **{_user_daily_m:.1f}M tokens/day**, **{_serverless.name}** is cheaper. "
+                    f"You'd need **{_crossover_m:.2f}M tokens/day** to justify "
+                    f"**{_dedicated.name}** at **${_dedicated.gpu_hourly_rate:.2f}/hr** and "
+                    f"`{_dedicated.utilization * 100:.0f}%` utilization."
                 )
 
         # Sweep daily-token range for the crossover plot. Anchor around the
         # crossover if feasible; otherwise anchor around the user's volume.
-        if be.break_even_feasible:
-            anchor = be.break_even_daily_output_tokens / 1_000_000
+        if _be.break_even_feasible:
+            _anchor = _be.break_even_daily_output_tokens / 1_000_000
         else:
-            anchor = max(user_daily_m, 1.0)
-        sweep = [max(anchor * f, 0.01) for f in (0.1, 0.3, 0.6, 1.0, 1.4, 1.8, 2.5)]
+            _anchor = max(_user_daily_m, 1.0)
+        _sweep = [max(_anchor * f, 0.01) for f in (0.1, 0.3, 0.6, 1.0, 1.4, 1.8, 2.5)]
         # Always include the user's volume in the sweep so the cost lines pass through it.
-        sweep = sorted(set(sweep + [user_daily_m]))
+        _sweep = sorted(set(_sweep + [_user_daily_m]))
 
-        sweep_cost_serverless = [v * serverless_rate_per_m for v in sweep]
-        sweep_cost_dedicated = [dedicated_daily for _ in sweep]  # flat: fixed daily GPU cost
+        _sweep_cost_serverless = [v * _serverless_rate_per_m for v in _sweep]
+        _sweep_cost_dedicated = [_dedicated_daily for _ in _sweep]  # flat: fixed daily GPU cost
 
-        fig = go.Figure()
-        fig.add_scatter(
-            x=sweep, y=sweep_cost_dedicated,
-            name=f"Dedicated ({dedicated.name})",
+        _fig = go.Figure()
+        _fig.add_scatter(
+            x=_sweep, y=_sweep_cost_dedicated,
+            name=f"Dedicated ({_dedicated.name})",
             line=dict(color="#3A4F2A", width=2),
             hovertemplate="%{x:.2f}M tok/day<br>$%{y:,.2f}/day<extra>Dedicated</extra>",
         )
-        fig.add_scatter(
-            x=sweep, y=sweep_cost_serverless,
-            name=f"Serverless ({serverless.name})",
+        _fig.add_scatter(
+            x=_sweep, y=_sweep_cost_serverless,
+            name=f"Serverless ({_serverless.name})",
             line=dict(color="#5C2A1E", width=2),
             hovertemplate="%{x:.2f}M tok/day<br>$%{y:,.2f}/day<extra>Serverless</extra>",
         )
         # Mark the user's current volume.
-        user_y = dedicated_daily if recommendation == "Dedicated GPU" else user_serverless_cost
-        fig.add_scatter(
-            x=[user_daily_m], y=[user_y],
+        _user_y = _dedicated_daily if _recommendation == "Dedicated GPU" else _user_serverless_cost
+        _fig.add_scatter(
+            x=[_user_daily_m], y=[_user_y],
             mode="markers",
             marker=dict(color="#1a1a1a", size=14, symbol="x"),
             name="Your volume",
             showlegend=False,
             hovertemplate=f"your volume: %{{x:.1f}}M tok/day<br>$%{{y:,.2f}}/day<extra></extra>",
         )
-        fig.update_layout(
+        _fig.update_layout(
             plot_bgcolor="#faf5e9", paper_bgcolor="#faf5e9",
             font_family="Newsreader, Georgia, serif", font_color="#1a1a1a",
             xaxis=dict(
@@ -424,32 +424,32 @@ def _break_even_render(
             legend=dict(x=0.02, y=0.98, bgcolor="rgba(250,245,233,0.8)"),
         )
 
-        verdict = mo.md(verdict_text)
-        crossover_str = (
-            f"**{be.break_even_daily_output_tokens / 1_000_000:.2f}M tokens/day**"
-            if be.break_even_feasible else "**not reachable at this utilization**"
+        _verdict = mo.md(_verdict_text)
+        _crossover_str = (
+            f"**{_be.break_even_daily_output_tokens / 1_000_000:.2f}M tokens/day**"
+            if _be.break_even_feasible else "**not reachable at this utilization**"
         )
-        details = mo.accordion({
+        _details = mo.accordion({
             "Details": mo.md(
-                f"- Recommendation at your volume: **{recommendation}**\n"
-                f"- Serverless rate: **${serverless_rate_per_m:.4f}/M output tokens**\n"
-                f"- Dedicated effective rate: **${be.effective_cost_per_m:.4f}/M output tokens** "
-                f"(at `{dedicated.utilization * 100:.0f}%` utilization)\n"
-                f"- Dedicated daily cost: **${dedicated_daily:,.2f}/day** "
-                f"(${dedicated.gpu_hourly_rate:.2f}/hr × 24)\n"
+                f"- Recommendation at your volume: **{_recommendation}**\n"
+                f"- Serverless rate: **${_serverless_rate_per_m:.4f}/M output tokens**\n"
+                f"- Dedicated effective rate: **${_be.effective_cost_per_m:.4f}/M output tokens** "
+                f"(at `{_dedicated.utilization * 100:.0f}%` utilization)\n"
+                f"- Dedicated daily cost: **${_dedicated_daily:,.2f}/day** "
+                f"(${_dedicated.gpu_hourly_rate:.2f}/hr × 24)\n"
                 f"- Effective dedicated capacity: "
-                f"**{be.effective_capacity_tokens_per_day / 1_000_000:.2f}M tokens/day**\n"
-                f"- Crossover volume: {crossover_str}\n"
+                f"**{_be.effective_capacity_tokens_per_day / 1_000_000:.2f}M tokens/day**\n"
+                f"- Crossover volume: {_crossover_str}\n"
                 f"- Required utilization for break-even: "
-                f"**{be.required_utilization * 100:.1f}%**"
+                f"**{_be.required_utilization * 100:.1f}%**"
             ),
         })
         be_block = mo.vstack([
             mo.md(f"## {MARIMO_VIEW_META[MarimoView.BREAK_EVEN].label}"),
             mo.hstack([serverless_dd, dedicated_dd, daily_tokens_input], justify="start"),
-            verdict,
-            mo.ui.plotly(fig),
-            details,
+            _verdict,
+            mo.ui.plotly(_fig),
+            _details,
         ])
     except Exception as e:
         be_block = mo.md(f"_Break-even computation error: {e}_")
@@ -498,86 +498,86 @@ def _goodput_render(
 
         # Source quality pass rate from the workload profile so the
         # view is reactive to the Landing dropdown.
-        quality_rate = profile.quality_gate_pass_rate
-        latency_rate = latency_pass_slider.value
-        n = 200  # screening batch size — enough to stabilize p99
-        n_quality_pass = int(n * quality_rate)
-        n_latency_pass = int(n * latency_rate)
+        _quality_rate = profile.quality_gate_pass_rate
+        _latency_rate = latency_pass_slider.value
+        _n = 200  # screening batch size — enough to stabilize p99
+        _n_quality_pass = int(_n * _quality_rate)
+        _n_latency_pass = int(_n * _latency_rate)
         # Approximate intersection assuming independence
-        n_both = int(n * quality_rate * latency_rate)
+        _n_both = int(_n * _quality_rate * _latency_rate)
 
-        ttft_slo_ms = float(ttft_slo.value)
-        tpot_slo_ms = float(tpot_slo.value)
+        _ttft_slo_ms = float(ttft_slo.value)
+        _tpot_slo_ms = float(tpot_slo.value)
         # Synthesize "passing" and "failing" archetypes around the SLO
-        ttft_pass_val = max(50.0, ttft_slo_ms * 0.6)
-        ttft_fail_val = ttft_slo_ms * 1.75
-        tpot_pass_val = max(5.0, tpot_slo_ms * 0.8)
-        tpot_fail_val = tpot_slo_ms * 1.4
-        cpr = float(cost_per_req.value)
+        _ttft_pass_val = max(50.0, _ttft_slo_ms * 0.6)
+        _ttft_fail_val = _ttft_slo_ms * 1.75
+        _tpot_pass_val = max(5.0, _tpot_slo_ms * 0.8)
+        _tpot_fail_val = _tpot_slo_ms * 1.4
+        _cpr = float(cost_per_req.value)
 
-        requests = []
-        for i in range(n):
-            if i < n_both:
-                qp, ttft, tpot = True, ttft_pass_val, tpot_pass_val
-            elif i < n_quality_pass:
-                qp, ttft, tpot = True, ttft_fail_val, tpot_fail_val
-            elif i < n_quality_pass + max(0, n_latency_pass - n_both):
-                qp, ttft, tpot = False, ttft_pass_val, tpot_pass_val
+        _requests = []
+        for i in range(_n):
+            if i < _n_both:
+                _qp, _ttft, _tpot = True, _ttft_pass_val, _tpot_pass_val
+            elif i < _n_quality_pass:
+                _qp, _ttft, _tpot = True, _ttft_fail_val, _tpot_fail_val
+            elif i < _n_quality_pass + max(0, _n_latency_pass - _n_both):
+                _qp, _ttft, _tpot = False, _ttft_pass_val, _tpot_pass_val
             else:
-                qp, ttft, tpot = False, ttft_fail_val, tpot_fail_val
-            requests.append(GoodputRequest(
-                ttft_ms=ttft,
-                tpot_ms=tpot,
+                _qp, _ttft, _tpot = False, _ttft_fail_val, _tpot_fail_val
+            _requests.append(GoodputRequest(
+                ttft_ms=_ttft,
+                tpot_ms=_tpot,
                 output_tokens=profile.avg_output_tokens,
-                quality_pass=qp,
-                cost=cpr,
+                quality_pass=_qp,
+                cost=_cpr,
             ))
 
         # Duration: assume 1 second of arrivals — goodput_rate then
         # reads as "accepted requests in this batch" per second.
-        duration = 1.0
-        gp = compute_goodput(requests, duration, ttft_slo_ms, tpot_slo_ms)
+        _duration = 1.0
+        _gp = compute_goodput(_requests, _duration, _ttft_slo_ms, _tpot_slo_ms)
 
         # Cost per accepted may be +inf if zero accepted; render safely.
-        if gp.accepted_requests == 0:
-            cost_str = "**∞** (no requests passed both gates)"
-            verdict = mo.md(
-                f"At TTFT ≤ **{ttft_slo_ms:.0f} ms** and TPOT ≤ **{tpot_slo_ms:.0f} ms/tok**, "
+        if _gp.accepted_requests == 0:
+            _cost_str = "**∞** (no requests passed both gates)"
+            _verdict = mo.md(
+                f"At TTFT ≤ **{_ttft_slo_ms:.0f} ms** and TPOT ≤ **{_tpot_slo_ms:.0f} ms/tok**, "
                 f"the `{workload_dd.value}` workload sustains **0 accepted req/s** — "
                 f"every request fails at least one gate."
             )
         else:
-            cost_str = f"**${gp.cost_per_accepted:.4f}**"
-            verdict = mo.md(
-                f"At TTFT ≤ **{ttft_slo_ms:.0f} ms**, TPOT ≤ **{tpot_slo_ms:.0f} ms/tok**, "
-                f"and quality ≥ **{quality_rate:.0%}** (from `{workload_dd.value}` preset), "
-                f"this workload sustains **{gp.goodput_rate:.1f} accepted req/s** at "
-                f"{cost_str} per accepted result."
+            _cost_str = f"**${_gp.cost_per_accepted:.4f}**"
+            _verdict = mo.md(
+                f"At TTFT ≤ **{_ttft_slo_ms:.0f} ms**, TPOT ≤ **{_tpot_slo_ms:.0f} ms/tok**, "
+                f"and quality ≥ **{_quality_rate:.0%}** (from `{workload_dd.value}` preset), "
+                f"this workload sustains **{_gp.goodput_rate:.1f} accepted req/s** at "
+                f"{_cost_str} per accepted result."
             )
 
-        details = mo.accordion({
+        _details = mo.accordion({
             "Details": mo.md(
-                f"- Total requests in screening batch: **{gp.total_requests}**\n"
-                f"- Accepted (passed all gates): **{gp.accepted_requests}** "
-                f"({gp.accepted_requests / gp.total_requests:.0%})\n"
-                f"- Goodput rate: **{gp.goodput_rate:.2f} accepted req/s**\n"
-                f"- Cost per accepted: {cost_str}\n"
+                f"- Total requests in screening batch: **{_gp.total_requests}**\n"
+                f"- Accepted (passed all gates): **{_gp.accepted_requests}** "
+                f"({_gp.accepted_requests / _gp.total_requests:.0%})\n"
+                f"- Goodput rate: **{_gp.goodput_rate:.2f} accepted req/s**\n"
+                f"- Cost per accepted: {_cost_str}\n"
                 f"- Total cost (all requests, paid even for failures): "
-                f"**${gp.total_cost:.4f}**\n"
-                f"- TTFT p99: **{gp.ttft_p99_ms:.0f} ms** "
-                f"(SLO: {ttft_slo_ms:.0f} ms)\n"
-                f"- TPOT p99: **{gp.tpot_p99_ms:.2f} ms/tok** "
-                f"(SLO: {tpot_slo_ms:.0f} ms)\n"
-                f"- Quality pass rate: **{gp.quality_pass_rate:.0%}** "
+                f"**${_gp.total_cost:.4f}**\n"
+                f"- TTFT p99: **{_gp.ttft_p99_ms:.0f} ms** "
+                f"(SLO: {_ttft_slo_ms:.0f} ms)\n"
+                f"- TPOT p99: **{_gp.tpot_p99_ms:.2f} ms/tok** "
+                f"(SLO: {_tpot_slo_ms:.0f} ms)\n"
+                f"- Quality pass rate: **{_gp.quality_pass_rate:.0%}** "
                 f"(from profile)\n"
-                f"- Latency pass rate: **{gp.latency_pass_rate:.0%}** "
+                f"- Latency pass rate: **{_gp.latency_pass_rate:.0%}** "
                 f"(from synthesis slider)"
             ),
         })
 
-        caption = mo.md(
+        _caption = mo.md(
             f"<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
-            f"Source: synthesized {n}-request batch from `{workload_dd.value}` profile · "
+            f"Source: synthesized {_n}-request batch from `{workload_dd.value}` profile · "
             f"Derivation 5 (goodput = accepted/duration)</small>"
         )
 
@@ -587,9 +587,9 @@ def _goodput_render(
                 [ttft_slo, tpot_slo, latency_pass_slider, cost_per_req],
                 justify="start",
             ),
-            verdict,
-            details,
-            caption,
+            _verdict,
+            _details,
+            _caption,
         ])
     except Exception as e:
         gp_block = mo.md(f"_Goodput computation error: {e}_")
@@ -651,7 +651,7 @@ def _trace_to_margin(
     (spec §9.1 step 7).
     """
     try:
-        result = compute_trace_to_margin(
+        _result = compute_trace_to_margin(
             trace_cost=float(ttm_trace_cost.value),
             invoice_amount=float(ttm_invoice.value),
             eval_cost=float(ttm_eval_cost.value),
@@ -662,30 +662,30 @@ def _trace_to_margin(
             revenue_per_unit=float(ttm_revenue_per_unit.value),
         )
 
-        verdict = mo.md(
-            f"LCPR is **${result.lcpr:.4f}** per accepted unit. Gross margin "
-            f"is **${result.gross_margin:,.2f}** "
-            f"(**{result.gross_margin_pct:.1%}** of revenue). The loaded-to-naive "
-            f"ratio is **{result.lcpr_to_naive_ratio:.2f}×** — naive trace cost "
-            f"per attempt was **${result.naive_cost_per_unit:.4f}**."
+        _verdict = mo.md(
+            f"LCPR is **${_result.lcpr:.4f}** per accepted unit. Gross margin "
+            f"is **${_result.gross_margin:,.2f}** "
+            f"(**{_result.gross_margin_pct:.1%}** of revenue). The loaded-to-naive "
+            f"ratio is **{_result.lcpr_to_naive_ratio:.2f}×** — naive trace cost "
+            f"per attempt was **${_result.naive_cost_per_unit:.4f}**."
         )
 
-        details = mo.accordion({
+        _details = mo.accordion({
             "Cost breakdown": mo.md(
-                f"- Raw trace cost: **${result.trace_cost:,.2f}**\n"
-                f"- Invoice amount: **${result.invoice_amount:,.2f}** "
-                f"(invoice − trace delta: **${result.delta:,.2f}**)\n"
-                f"- Eval cost: **${result.eval_cost:,.2f}**\n"
-                f"- Human escalation: **${result.human_cost:,.2f}**\n"
-                f"- Ops cost: **${result.ops_cost:,.2f}**\n"
-                f"- **Total loaded cost: ${result.total_loaded_cost:,.2f}**\n"
-                f"- Accepted units: **{result.accepted_units:,}**\n"
-                f"- Revenue: **${result.revenue:,.2f}** "
+                f"- Raw trace cost: **${_result.trace_cost:,.2f}**\n"
+                f"- Invoice amount: **${_result.invoice_amount:,.2f}** "
+                f"(invoice − trace delta: **${_result.delta:,.2f}**)\n"
+                f"- Eval cost: **${_result.eval_cost:,.2f}**\n"
+                f"- Human escalation: **${_result.human_cost:,.2f}**\n"
+                f"- Ops cost: **${_result.ops_cost:,.2f}**\n"
+                f"- **Total loaded cost: ${_result.total_loaded_cost:,.2f}**\n"
+                f"- Accepted units: **{_result.accepted_units:,}**\n"
+                f"- Revenue: **${_result.revenue:,.2f}** "
                 f"(@ ${ttm_revenue_per_unit.value:.4f}/unit)"
             ),
         })
 
-        caption = mo.md(
+        _caption = mo.md(
             f"<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
             f"Source: user inputs · Derivation 6 "
             f"(LCPR = loaded_cost / accepted_units)</small>"
@@ -705,9 +705,9 @@ def _trace_to_margin(
                 [ttm_human_cost, ttm_ops_cost],
                 justify="start",
             ),
-            verdict,
-            details,
-            caption,
+            _verdict,
+            _details,
+            _caption,
         ])
     except Exception as e:
         ttm_block = mo.md(f"_Trace-to-margin computation error: {e}_")
@@ -812,7 +812,7 @@ def _advanced(
     """
     # ── Cache Gate sub-panel ──
     try:
-        cache_result = compute_cache_break_even(
+        _cache_result = compute_cache_break_even(
             prefix_tokens=int(cache_prefix_tokens.value),
             uncached_input_price_per_m=float(cache_uncached_price.value),
             cache_write_price_per_m=float(cache_write_price.value),
@@ -820,13 +820,13 @@ def _advanced(
             storage_price_per_m_hour=float(cache_storage_price.value),
             storage_hours=float(cache_storage_hours.value),
         )
-        if cache_result.break_even_requests == float("inf"):
-            break_even_text = "**Never** (cache read price ≥ uncached price)"
+        if _cache_result.break_even_requests == float("inf"):
+            _break_even_text = "**Never** (cache read price ≥ uncached price)"
         else:
-            break_even_text = f"**{cache_result.break_even_requests:.2f}** reuses"
-        savings_10 = cache_result.savings_at_n.get(10, 0.0)
-        savings_100 = cache_result.savings_at_n.get(100, 0.0)
-        cache_panel = mo.vstack([
+            _break_even_text = f"**{_cache_result.break_even_requests:.2f}** reuses"
+        _savings_10 = _cache_result.savings_at_n.get(10, 0.0)
+        _savings_100 = _cache_result.savings_at_n.get(100, 0.0)
+        _cache_panel = mo.vstack([
             mo.hstack(
                 [cache_prefix_tokens, cache_uncached_price, cache_write_price],
                 justify="start",
@@ -836,10 +836,10 @@ def _advanced(
                 justify="start",
             ),
             mo.md(
-                f"Cache pays off at {break_even_text} of the cached prefix. "
-                f"Storage cost over retention: **${cache_result.storage_cost:.4f}**. "
-                f"Projected savings at 10 reuses: **${savings_10:.4f}**; "
-                f"at 100 reuses: **${savings_100:.4f}**."
+                f"Cache pays off at {_break_even_text} of the cached prefix. "
+                f"Storage cost over retention: **${_cache_result.storage_cost:.4f}**. "
+                f"Projected savings at 10 reuses: **${_savings_10:.4f}**; "
+                f"at 100 reuses: **${_savings_100:.4f}**."
             ),
             mo.md(
                 "<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
@@ -849,11 +849,11 @@ def _advanced(
             ),
         ])
     except Exception as e:
-        cache_panel = mo.md(f"_Cache Gate computation error: {e}_")
+        _cache_panel = mo.md(f"_Cache Gate computation error: {e}_")
 
     # ── KV Capacity sub-panel ──
     try:
-        kv_result = compute_kv_sizing(
+        _kv_result = compute_kv_sizing(
             n_layers=int(kv_n_layers.value),
             n_kv_heads=int(kv_n_heads.value),
             head_dim=int(kv_head_dim.value),
@@ -863,14 +863,14 @@ def _advanced(
             headroom_fraction=float(kv_headroom.value),
             weight_bytes=float(kv_weight_gb.value) * 1_000_000_000,
         )
-        if kv_result.context_length_at_weight_parity:
-            parity_text = (
+        if _kv_result.context_length_at_weight_parity:
+            _parity_text = (
                 f"weight-parity context length is "
-                f"**{kv_result.context_length_at_weight_parity:,}** tokens"
+                f"**{_kv_result.context_length_at_weight_parity:,}** tokens"
             )
         else:
-            parity_text = "weight-parity context length is **N/A**"
-        kv_panel = mo.vstack([
+            _parity_text = "weight-parity context length is **N/A**"
+        _kv_panel = mo.vstack([
             mo.hstack(
                 [kv_n_layers, kv_n_heads, kv_head_dim, kv_element_bytes],
                 justify="start",
@@ -880,13 +880,13 @@ def _advanced(
                 justify="start",
             ),
             mo.md(
-                f"KV bytes/token: **{kv_result.kv_bytes_per_token:,.0f}**. "
+                f"KV bytes/token: **{_kv_result.kv_bytes_per_token:,.0f}**. "
                 f"Per-sequence KV memory: "
-                f"**{kv_result.total_kv_memory_per_seq / 1e9:.2f} GB**. "
+                f"**{_kv_result.total_kv_memory_per_seq / 1e9:.2f} GB**. "
                 f"Maximum concurrent live sequences: "
-                f"**{kv_result.max_live_sequences:,}** "
+                f"**{_kv_result.max_live_sequences:,}** "
                 f"(after {kv_headroom.value:.0%} headroom). "
-                f"The {parity_text}."
+                f"The {_parity_text}."
             ),
             mo.md(
                 "<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
@@ -896,7 +896,7 @@ def _advanced(
             ),
         ])
     except Exception as e:
-        kv_panel = mo.md(f"_KV Capacity computation error: {e}_")
+        _kv_panel = mo.md(f"_KV Capacity computation error: {e}_")
 
     # ── Compose tabs (5 stubs are P2-T11.1-T11.5 follow-ups) ──
     advanced_block = mo.vstack([
@@ -907,8 +907,8 @@ def _advanced(
             "follow-ups and currently render placeholders."
         ),
         mo.ui.tabs({
-            "Cache Gate": cache_panel,
-            "KV Capacity": kv_panel,
+            "Cache Gate": _cache_panel,
+            "KV Capacity": _kv_panel,
             "Migration": mo.md(
                 "_Migration readiness scoring — TODO (P2-T11.1, port from "
                 "app.py:602-852)._"
