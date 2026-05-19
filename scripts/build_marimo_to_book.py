@@ -54,7 +54,11 @@ def main() -> int:
         print("  Skipping copy step. Build is at marimo-build/ for manual handling.")
         return 0
 
-    target = book_repo / "output" / "book" / "calculator"
+    # Target is content/extra/book/calculator/ so Pelican's EXTRA_PATH_METADATA
+    # walker (in book repo's pelicanconf.py:35-42) picks the files up as static
+    # content. Pelican's CI uses DELETE_OUTPUT_DIRECTORY=True so committing
+    # directly to output/ would be wiped on every build.
+    target = book_repo / "content" / "extra" / "book" / "calculator"
     print(f"[2/3] Copying {build_dir}/ -> {target}/")
     if target.exists():
         shutil.rmtree(target)
@@ -63,9 +67,13 @@ def main() -> int:
     print("  OK")
 
     print("[3/3] Done.")
-    print(f"  Calculator deployed to: {target}/")
-    print(f"  Local preview: cd {book_repo} && python -m http.server -d output 8000")
-    print("    then open: http://localhost:8000/book/calculator/")
+    print(f"  Calculator copied to: {target}/")
+    print("  Next:")
+    print(f"    cd {book_repo}")
+    print("    git add content/extra/book/calculator/")
+    print(f"    git commit -m 'feat(book): redeploy Marimo calculator'")
+    print("    git push origin master")
+    print("  GitHub Actions will rebuild Pelican + serve at sohailmo.ai/book/calculator/")
     return 0
 
 
