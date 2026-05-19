@@ -36,12 +36,17 @@ PEP723_HEADER = '''# /// script
 
 
 # Dependency-ordered list. Earlier modules must not import from later ones.
+# Verified via: grep "from calculator\." calculator/*.py
+#   lcpr: no calculator-internal deps (defines WorkloadProfile, LCPRResult, etc.)
+#   readiness: no calculator-internal deps (standalone)
+#   view_registry: no calculator-internal deps at import time
+#   confidence, workload_profiles, permalink: all `from calculator.lcpr import ...`
 BUNDLE_ORDER = [
+    "lcpr",
+    "readiness",
     "confidence",
     "workload_profiles",
     "permalink",
-    "readiness",
-    "lcpr",
     "view_registry",
 ]
 
