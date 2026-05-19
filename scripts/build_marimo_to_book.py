@@ -92,33 +92,40 @@ def main() -> int:
     shutil.copytree(build_dir, target)
     print("  OK")
 
-    # Marimo's exported index.html preloads Lora + PTSans + FiraMono, but we
-    # want the calculator to render in Newsreader + Instrument Serif + JBMono
-    # (the book design fonts). Without this, the page paints in Lora on first
-    # load and then visibly swaps when the theme CSS triggers the Google Fonts
-    # fetch — a FOUT. Inject the Google Fonts stylesheet into the bundle's
-    # <head> so the right fonts load on first paint.
-    print("[4/5] Injecting site Google Fonts into bundle's index.html")
+    # Marimo's exported index.html preloads Lora + PTSans + FiraMono and ships
+    # Marimo's bundled stylesheets in <head>. The cell-level mo.Html() theme
+    # injection at runtime ends up scoped to a cell output and DOES NOT cascade
+    # over the App-level branding (watermark, banner) or Radix-rendered widgets
+    # outside cells. To fix: inject BOTH our Google Fonts stylesheet AND the
+    # full marimo-theme.css contents into the bundle's <head>, AFTER Marimo's
+    # own stylesheet links, so source order puts our rules last in the cascade.
+    print("[4/5] Injecting site fonts + theme CSS into bundle's index.html")
     idx = target / "index.html"
     if idx.exists():
         html = idx.read_text()
+        theme_css_path = Path("calculator/static/marimo-theme.css")
+        theme_css = theme_css_path.read_text() if theme_css_path.exists() else ""
+
         if "fonts.googleapis.com" not in html:
-            site_fonts = (
+            inject = (
                 '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
                 '    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
                 '    <link rel="stylesheet" '
                 'href="https://fonts.googleapis.com/css2?'
                 'family=Instrument+Serif:ital@0;1&'
                 'family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,700&'
-                'family=JetBrains+Mono:wght@400;500;600;700&display=swap">\n  '
+                'family=JetBrains+Mono:wght@400;500;600;700&display=swap">\n    '
+                "<style data-source=\"marimo-theme.css\">\n"
+                + theme_css +
+                "\n    </style>\n  "
             )
-            html = html.replace("</head>", site_fonts + "</head>", 1)
+            html = html.replace("</head>", inject + "</head>", 1)
             idx.write_text(html)
-            print("  OK: site fonts injected")
+            print("  OK: fonts + theme CSS injected into <head>")
         else:
             print("  SKIP: index.html already references fonts.googleapis.com")
     else:
-        print(f"  WARN: {idx} not found; skipping font injection")
+        print(f"  WARN: {idx} not found; skipping font + theme injection")
 
     print("[5/5] Done.")
     print(f"  Calculator copied to: {target}/")

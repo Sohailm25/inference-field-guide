@@ -1,5 +1,7 @@
 /* ABOUTME: Marimo 0.23 theme override — moss + oxblood, Newsreader body.
-   ABOUTME: Selectors target Marimo's actual custom-element + Radix DOM. */
+   ABOUTME: Injected at the end of <head> by build_marimo_to_book.py so it
+   ABOUTME: cascades over Marimo's bundled stylesheets. Uses direct ARIA
+   ABOUTME: roles + Radix data-state attributes (no `marimo-XXX` wrapper). */
 
 :root {
   --paper:      #faf5e9;
@@ -8,17 +10,17 @@
   --ink-soft:   #a3ad8a;
   --brown:      #5C2A1E;
   --brown-soft: #b39a90;
-  --text:       #1a1a1a;
+  --text-ink:   #1a1a1a;
   --text-deck:  #4a4a4a;
   --text-mute:  #8a8a8a;
-  /* Override Marimo's medium-width column to the book's reading measure */
   --content-width-medium: 88ch;
 }
 
 /* ── Page background + body type ─────────────── */
-html, body { background: var(--paper) !important; }
-body {
-  color: var(--text) !important;
+html, body,
+body.light, body.light-theme {
+  background: var(--paper) !important;
+  color: var(--text-ink) !important;
   font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif !important;
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
@@ -34,7 +36,7 @@ body {
 h1, h2, h3, h4, h5, h6 {
   color: var(--ink) !important;
   font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif !important;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.01em !important;
 }
 
 /* ── Inline code / monospace data ──────────────── */
@@ -42,36 +44,45 @@ code, pre, kbd, samp {
   font-family: 'JetBrains Mono', 'SF Mono', monospace !important;
   font-variant-numeric: tabular-nums slashed-zero;
 }
-code {
-  background: var(--paper-tint);
-  padding: 0.1em 0.35em;
-  border-radius: 2px;
-  font-size: 0.92em;
+code:not(pre code) {
+  background: var(--paper-tint) !important;
+  padding: 0.1em 0.35em !important;
+  border-radius: 2px !important;
+  font-size: 0.92em !important;
+  color: var(--text-ink) !important;
 }
 
 /* ── Links — body color, moss-soft underline ────── */
 a {
-  color: var(--text) !important;
-  text-decoration: underline;
-  text-decoration-color: var(--ink-soft);
-  text-underline-offset: 0.18em;
+  color: var(--text-ink) !important;
+  text-decoration-color: var(--ink-soft) !important;
+  text-underline-offset: 0.18em !important;
 }
-a:hover { color: var(--brown) !important; text-decoration-color: var(--brown); }
+a:hover {
+  color: var(--brown) !important;
+  text-decoration-color: var(--brown) !important;
+}
 
-/* ── Dropdown (Radix Select via custom element) ── */
-marimo-dropdown [role="combobox"] {
+/* ── Dropdown trigger (Radix Select trigger button) ── */
+button[role="combobox"],
+[role="combobox"][aria-haspopup],
+select {
   background: var(--paper) !important;
   border: 1px solid var(--ink) !important;
-  color: var(--text) !important;
+  color: var(--text-ink) !important;
   font-family: 'JetBrains Mono', monospace !important;
   font-size: 0.85rem !important;
   padding: 0.35em 0.7em !important;
   border-radius: 2px !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
 }
-marimo-dropdown [role="combobox"][data-state="open"] {
-  outline: 2px solid var(--ink-soft);
-  outline-offset: 1px;
+button[role="combobox"][data-state="open"] {
+  outline: 2px solid var(--ink-soft) !important;
+  outline-offset: 1px !important;
 }
+
+/* ── Dropdown listbox + options (Radix Select content) ── */
 [role="listbox"] {
   background: var(--paper) !important;
   border: 1px solid var(--ink) !important;
@@ -79,53 +90,75 @@ marimo-dropdown [role="combobox"][data-state="open"] {
   font-size: 0.85rem !important;
   border-radius: 2px !important;
 }
-[role="option"][data-highlighted] { background: var(--paper-tint) !important; color: var(--ink) !important; }
-[role="option"][data-state="checked"] { color: var(--ink) !important; font-weight: 700; }
-
-/* ── Slider (custom element wrapping Radix Slider) ── */
-marimo-slider [data-testid="track"] {
-  background: var(--ink-soft) !important;
-  height: 4px !important;
-  border-radius: 2px !important;
-}
-marimo-slider [data-testid="range"] {
-  background: var(--ink) !important;
-}
-marimo-slider [role="slider"] {
-  background: var(--ink) !important;
-  border: 2px solid var(--paper) !important;
-  width: 14px !important;
-  height: 14px !important;
-  box-shadow: 0 0 0 1px var(--ink) !important;
-}
-
-/* ── Number input (React-Aria spinbutton) ─────── */
-marimo-number [role="group"] {
-  border: 1px solid var(--ink) !important;
-  border-radius: 2px !important;
-  background: var(--paper) !important;
-}
-marimo-number [role="spinbutton"] {
+[role="option"] {
   font-family: 'JetBrains Mono', monospace !important;
-  font-size: 0.85rem !important;
-  background: transparent !important;
-  border: none !important;
-  color: var(--text) !important;
-  padding: 0.3em 0.6em !important;
+  color: var(--text-ink) !important;
 }
-marimo-number [slot="increment"],
-marimo-number [slot="decrement"] {
+[role="option"][data-highlighted] {
   background: var(--paper-tint) !important;
   color: var(--ink) !important;
-  border-left: 1px solid var(--ink) !important;
+}
+[role="option"][data-state="checked"] {
+  color: var(--ink) !important;
+  font-weight: 700 !important;
 }
 
-/* ── Tabs (Radix Tabs via custom element) ─────── */
-marimo-tabs [role="tablist"] {
+/* ── Slider thumb + Radix slider parts ── */
+[role="slider"] {
+  background: var(--ink) !important;
+  border: 2px solid var(--paper) !important;
+  box-shadow: 0 0 0 1px var(--ink) !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+/* Slider track is a span that wraps the slider; range is a child span. We
+   target by data-orientation since Radix sets it on slider parts. */
+span[data-orientation="horizontal"]:has(> [role="slider"]),
+span[data-orientation="horizontal"] > span[data-orientation="horizontal"] {
+  background: var(--ink-soft) !important;
+}
+span[data-orientation="horizontal"][data-disabled] {
+  opacity: 0.5 !important;
+}
+
+/* ── Number input (React-Aria spinbutton OR native input[type=number]) ── */
+input[type="number"],
+input[role="spinbutton"],
+[role="spinbutton"] input,
+[role="spinbutton"] {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.85rem !important;
+  background: var(--paper) !important;
+  border: 1px solid var(--ink) !important;
+  color: var(--text-ink) !important;
+  border-radius: 2px !important;
+  padding: 0.3em 0.6em !important;
+}
+input[type="number"]:focus,
+input[role="spinbutton"]:focus {
+  outline: 2px solid var(--ink-soft) !important;
+  outline-offset: 1px !important;
+}
+
+/* ── Text input ──────────────────────────────── */
+input[type="text"],
+input[type="email"]:not([role]) {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.85rem !important;
+  background: var(--paper) !important;
+  border: 1px solid var(--ink) !important;
+  color: var(--text-ink) !important;
+  border-radius: 2px !important;
+  padding: 0.3em 0.6em !important;
+}
+
+/* ── Tabs (Radix Tabs — direct ARIA selectors, no marimo-tabs wrapper) ── */
+[role="tablist"] {
   border-bottom: 1px solid var(--ink-soft) !important;
   gap: 0 !important;
+  background: transparent !important;
 }
-marimo-tabs [role="tab"] {
+[role="tab"] {
   font-family: 'JetBrains Mono', monospace !important;
   font-size: 0.78rem !important;
   text-transform: uppercase !important;
@@ -136,23 +169,29 @@ marimo-tabs [role="tab"] {
   border-bottom: 2px solid transparent !important;
   padding: 0.5em 1em !important;
   margin-bottom: -1px !important;
+  border-radius: 0 !important;
 }
-marimo-tabs [role="tab"]:hover { color: var(--ink) !important; }
-marimo-tabs [role="tab"][data-state="active"] {
+[role="tab"]:hover {
+  color: var(--ink) !important;
+  background: transparent !important;
+}
+[role="tab"][data-state="active"],
+[role="tab"][aria-selected="true"] {
   color: var(--ink) !important;
   border-bottom-color: var(--ink) !important;
   font-weight: 700 !important;
+  background: transparent !important;
 }
 
-/* ── Accordion (Radix Accordion via custom element) ── */
-marimo-accordion {
+/* ── Accordion (Radix Accordion — Marimo wraps mo.accordion via details/summary or Radix) ── */
+details {
   border-top: 1px solid var(--ink-soft) !important;
   border-bottom: 1px solid var(--ink-soft) !important;
   margin: 0.5em 0 !important;
   background: transparent !important;
 }
-marimo-accordion h3,
-marimo-accordion button {
+details > summary,
+[data-state]:has(> [data-orientation]) > button[aria-expanded] {
   font-family: 'JetBrains Mono', monospace !important;
   font-size: 0.85rem !important;
   text-transform: uppercase !important;
@@ -162,48 +201,29 @@ marimo-accordion button {
   border: none !important;
   padding: 0.5em 0 !important;
   cursor: pointer !important;
-  text-align: left !important;
-}
-marimo-accordion [role="region"] {
-  padding: 0.5em 0 !important;
 }
 
-/* ── Switch (mo.ui.switch via Radix Switch) ───── */
-marimo-switch [role="switch"] {
+/* ── Switch (Radix Switch) ───────────────────── */
+[role="switch"] {
   background: var(--ink-soft) !important;
   border: 1px solid var(--ink) !important;
 }
-marimo-switch [role="switch"][data-state="checked"] {
+[role="switch"][data-state="checked"] {
   background: var(--ink) !important;
-}
-marimo-switch [role="switch"] [data-state] {
-  background: var(--paper) !important;
-}
-
-/* ── Text input fallback (mo.ui.text, generic <input type="text">) ── */
-marimo-text input,
-input[type="text"]:not([role="spinbutton"]):not([role="combobox"]) {
-  font-family: 'JetBrains Mono', monospace !important;
-  font-size: 0.85rem !important;
-  background: var(--paper) !important;
-  border: 1px solid var(--ink) !important;
-  color: var(--text) !important;
-  border-radius: 2px !important;
-  padding: 0.3em 0.6em !important;
 }
 
 /* ── Focus rings (keyboard nav) — moss-soft outline ── */
 :focus-visible {
   outline: 2px solid var(--ink-soft) !important;
   outline-offset: 2px !important;
-  border-radius: 2px;
+  border-radius: 2px !important;
 }
 [role="tab"]:focus-visible,
 [role="option"]:focus-visible {
   outline-offset: -2px !important;
 }
 
-/* ── Plotly chart modebar (the toolbar that appears on hover) ── */
+/* ── Plotly chart modebar ────────────────────── */
 .modebar {
   background: var(--paper-tint) !important;
   border: 1px solid var(--ink-soft) !important;
@@ -214,16 +234,22 @@ input[type="text"]:not([role="spinbutton"]):not([role="combobox"]) {
 .modebar-btn.active path { fill: var(--brown) !important; }
 
 /* ── Tables (data) ─────────────────────────────── */
-table { border-collapse: collapse; width: 100%; font-family: 'Newsreader', Georgia, serif; font-size: 0.92rem; }
-th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid var(--ink-soft); }
-th {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink);
-  background: var(--paper-tint);
+table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  font-family: 'Newsreader', Georgia, serif !important;
+  font-size: 0.92rem !important;
 }
-
-/* ── Cell column width — match book reading measure ── */
-.marimo-cell { max-width: inherit; }
+th, td {
+  padding: 0.4rem 0.6rem !important;
+  text-align: left !important;
+  border-bottom: 1px solid var(--ink-soft) !important;
+}
+th {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.72rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  color: var(--ink) !important;
+  background: var(--paper-tint) !important;
+}
