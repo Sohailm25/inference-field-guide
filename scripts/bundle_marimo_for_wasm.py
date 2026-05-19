@@ -75,6 +75,11 @@ def emit_bundle(src_root: Path, marimo_app_path: Path, out_path: Path) -> None:
 
     bootstrap_lines: list[str] = [
         "import sys, types, os",
+        # Pyodide doesn't auto-install from PEP 723 metadata in all marimo",
+        # versions — explicit micropip.install is the bulletproof path.",
+        "if sys.platform == 'emscripten':",
+        "    import micropip",
+        "    await micropip.install(['plotly', 'pyyaml'])",
         "_calc_pkg = types.ModuleType('calculator')",
         "_calc_pkg.__path__ = []",
         "sys.modules['calculator'] = _calc_pkg",
@@ -149,6 +154,13 @@ def emit_bundle(src_root: Path, marimo_app_path: Path, out_path: Path) -> None:
     if inject_marker not in marimo_app_src:
         print("ERROR: could not find _imports cell marker in marimo_app.py")
         sys.exit(2)
+    # Make the cell async since the bootstrap uses `await micropip.install(...)`.
+    # Marimo supports async cells natively.
+    marimo_app_src = marimo_app_src.replace(
+        "def _imports():\n",
+        "async def _imports():\n",
+    )
+    inject_marker = "async def _imports():\n"
     insert_after = marimo_app_src.index(inject_marker) + len(inject_marker)
     marimo_app_src = (
         marimo_app_src[:insert_after]
