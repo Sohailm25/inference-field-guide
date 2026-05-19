@@ -111,13 +111,13 @@ def _landing_render(mo, MARIMO_VIEW_META, MarimoView, workload_dd, filter_dd, ca
     if cheapest and _second:
         _verdict = mo.md(
             f"At your volume, **{cheapest.provider_name}** is cheapest at LCPR "
-            f"**${cheapest.lcpr:.4f}** vs. **{_second.provider_name}** at LCPR "
-            f"**${_second.lcpr:.4f}**. See the **Compare** view for the full table."
+            f"`${cheapest.lcpr:.4f}` vs. **{_second.provider_name}** at LCPR "
+            f"`${_second.lcpr:.4f}`. See the **Compare** view for the full table."
         )
     elif cheapest:
         _verdict = mo.md(
             f"At your volume, **{cheapest.provider_name}** is the only matching config "
-            f"at LCPR **${cheapest.lcpr:.4f}**."
+            f"at LCPR `${cheapest.lcpr:.4f}`."
         )
     else:
         _verdict = mo.md("_No matching configurations for this filter._")
@@ -182,7 +182,7 @@ def _compare(mo, go, workload_dd, results, MARIMO_VIEW_META, MarimoView):
         _cheapest = _sorted_results[0]
         _verdict = mo.md(
             f"**{_cheapest.provider_name} ({_cheapest.deployment_mode})** is the lowest loaded cost per accepted result "
-            f"at **${_cheapest.lcpr:.4f}** for your `{workload_dd.value}` profile."
+            f"at `${_cheapest.lcpr:.4f}` for your `{workload_dd.value}` profile."
         )
 
         # Source caption
@@ -270,7 +270,7 @@ def _sensitivity_render(mo, go, calc, profile, replace, PARAM_LABELS, MarimoView
         _pct = abs(_delta / _lcprs[4]) * 100 if _lcprs[4] else 0
         _verdict = mo.md(
             f"As **{_human_label}** sweeps from `{_lo:.4f}` to `{_hi:.4f}`, LCPR {_direction} by "
-            f"**${abs(_delta):.4f}** (**{_pct:.1f}%** of current). "
+            f"`${abs(_delta):.4f}` (**{_pct:.1f}%** of current). "
             f"The current value `{_current:.4f}` is marked with an `×`."
         )
 
@@ -344,8 +344,8 @@ def _break_even_render(
                 f"At any volume, **{_serverless.name}** (serverless) is cheaper than "
                 f"**{_dedicated.name}** at the stated utilization "
                 f"(`{_dedicated.utilization * 100:.0f}%`). "
-                f"Dedicated effective cost is **${_be.effective_cost_per_m:.4f}/M** vs "
-                f"serverless **${_serverless_rate_per_m:.4f}/M**. "
+                f"Dedicated effective cost is `${_be.effective_cost_per_m:.4f}/M` vs "
+                f"serverless `${_serverless_rate_per_m:.4f}/M`. "
                 f"You'd need utilization ≥ **{_be.required_utilization * 100:.1f}%** to break even."
             )
             _recommendation = "Serverless"
@@ -357,7 +357,7 @@ def _break_even_render(
                 _savings = _user_serverless_cost - _dedicated_daily
                 _verdict_text = (
                     f"At **{_user_daily_m:.1f}M tokens/day**, **{_dedicated.name}** is cheaper. "
-                    f"Estimated daily savings vs **{_serverless.name}**: **${_savings:,.2f}**. "
+                    f"Estimated daily savings vs **{_serverless.name}**: `${_savings:,.2f}`. "
                     f"Crossover at **{_crossover_m:.2f}M tokens/day**."
                 )
             else:
@@ -365,7 +365,7 @@ def _break_even_render(
                 _verdict_text = (
                     f"At **{_user_daily_m:.1f}M tokens/day**, **{_serverless.name}** is cheaper. "
                     f"You'd need **{_crossover_m:.2f}M tokens/day** to justify "
-                    f"**{_dedicated.name}** at **${_dedicated.gpu_hourly_rate:.2f}/hr** and "
+                    f"**{_dedicated.name}** at `${_dedicated.gpu_hourly_rate:.2f}/hr` and "
                     f"`{_dedicated.utilization * 100:.0f}%` utilization."
                 )
 
@@ -431,11 +431,11 @@ def _break_even_render(
         _details = mo.accordion({
             "Details": mo.md(
                 f"- Recommendation at your volume: **{_recommendation}**\n"
-                f"- Serverless rate: **${_serverless_rate_per_m:.4f}/M output tokens**\n"
-                f"- Dedicated effective rate: **${_be.effective_cost_per_m:.4f}/M output tokens** "
+                f"- Serverless rate: `${_serverless_rate_per_m:.4f}/M` output tokens\n"
+                f"- Dedicated effective rate: `${_be.effective_cost_per_m:.4f}/M` output tokens "
                 f"(at `{_dedicated.utilization * 100:.0f}%` utilization)\n"
-                f"- Dedicated daily cost: **${_dedicated_daily:,.2f}/day** "
-                f"(${_dedicated.gpu_hourly_rate:.2f}/hr × 24)\n"
+                f"- Dedicated daily cost: `${_dedicated_daily:,.2f}/day` "
+                f"(`${_dedicated.gpu_hourly_rate:.2f}/hr` × 24)\n"
                 f"- Effective dedicated capacity: "
                 f"**{_be.effective_capacity_tokens_per_day / 1_000_000:.2f}M tokens/day**\n"
                 f"- Crossover volume: {_crossover_str}\n"
@@ -546,7 +546,7 @@ def _goodput_render(
                 f"every request fails at least one gate."
             )
         else:
-            _cost_str = f"**${_gp.cost_per_accepted:.4f}**"
+            _cost_str = f"`${_gp.cost_per_accepted:.4f}`"
             _verdict = mo.md(
                 f"At TTFT ≤ **{_ttft_slo_ms:.0f} ms**, TPOT ≤ **{_tpot_slo_ms:.0f} ms/tok**, "
                 f"and quality ≥ **{_quality_rate:.0%}** (from `{workload_dd.value}` preset), "
@@ -562,7 +562,7 @@ def _goodput_render(
                 f"- Goodput rate: **{_gp.goodput_rate:.2f} accepted req/s**\n"
                 f"- Cost per accepted: {_cost_str}\n"
                 f"- Total cost (all requests, paid even for failures): "
-                f"**${_gp.total_cost:.4f}**\n"
+                f"`${_gp.total_cost:.4f}`\n"
                 f"- TTFT p99: **{_gp.ttft_p99_ms:.0f} ms** "
                 f"(SLO: {_ttft_slo_ms:.0f} ms)\n"
                 f"- TPOT p99: **{_gp.tpot_p99_ms:.2f} ms/tok** "
@@ -662,25 +662,25 @@ def _trace_to_margin(
         )
 
         _verdict = mo.md(
-            f"LCPR is **${_result.lcpr:.4f}** per accepted unit. Gross margin "
-            f"is **${_result.gross_margin:,.2f}** "
+            f"LCPR is `${_result.lcpr:.4f}` per accepted unit. Gross margin "
+            f"is `${_result.gross_margin:,.2f}` "
             f"(**{_result.gross_margin_pct:.1%}** of revenue). The loaded-to-naive "
             f"ratio is **{_result.lcpr_to_naive_ratio:.2f}×** — naive trace cost "
-            f"per attempt was **${_result.naive_cost_per_unit:.4f}**."
+            f"per attempt was `${_result.naive_cost_per_unit:.4f}`."
         )
 
         _details = mo.accordion({
             "Cost breakdown": mo.md(
-                f"- Raw trace cost: **${_result.trace_cost:,.2f}**\n"
-                f"- Invoice amount: **${_result.invoice_amount:,.2f}** "
-                f"(invoice − trace delta: **${_result.delta:,.2f}**)\n"
-                f"- Eval cost: **${_result.eval_cost:,.2f}**\n"
-                f"- Human escalation: **${_result.human_cost:,.2f}**\n"
-                f"- Ops cost: **${_result.ops_cost:,.2f}**\n"
-                f"- **Total loaded cost: ${_result.total_loaded_cost:,.2f}**\n"
+                f"- Raw trace cost: `${_result.trace_cost:,.2f}`\n"
+                f"- Invoice amount: `${_result.invoice_amount:,.2f}` "
+                f"(invoice − trace delta: `${_result.delta:,.2f}`)\n"
+                f"- Eval cost: `${_result.eval_cost:,.2f}`\n"
+                f"- Human escalation: `${_result.human_cost:,.2f}`\n"
+                f"- Ops cost: `${_result.ops_cost:,.2f}`\n"
+                f"- **Total loaded cost:** `${_result.total_loaded_cost:,.2f}`\n"
                 f"- Accepted units: **{_result.accepted_units:,}**\n"
-                f"- Revenue: **${_result.revenue:,.2f}** "
-                f"(@ ${ttm_revenue_per_unit.value:.4f}/unit)"
+                f"- Revenue: `${_result.revenue:,.2f}` "
+                f"(@ `${ttm_revenue_per_unit.value:.4f}/unit`)"
             ),
         })
 
@@ -836,9 +836,9 @@ def _advanced(
             ),
             mo.md(
                 f"Cache pays off at {_break_even_text} of the cached prefix. "
-                f"Storage cost over retention: **${_cache_result.storage_cost:.4f}**. "
-                f"Projected savings at 10 reuses: **${_savings_10:.4f}**; "
-                f"at 100 reuses: **${_savings_100:.4f}**."
+                f"Storage cost over retention: `${_cache_result.storage_cost:.4f}`. "
+                f"Projected savings at 10 reuses: `${_savings_10:.4f}`; "
+                f"at 100 reuses: `${_savings_100:.4f}`."
             ),
             mo.md(
                 "<small style='color:#5C2A1E;font-family:JetBrains Mono,monospace'>"
