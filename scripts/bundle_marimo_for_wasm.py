@@ -84,7 +84,9 @@ def emit_bundle(src_root: Path, marimo_app_path: Path, out_path: Path) -> None:
         # versions — explicit micropip.install is the bulletproof path.",
         "if sys.platform == 'emscripten':",
         "    import micropip",
-        "    await micropip.install(['plotly', 'pyyaml'])",
+        # numpy is required by plotly.express; pyodide ships numpy as a native
+        # package so micropip resolves it from pyodide's index.
+        "    await micropip.install(['plotly', 'pyyaml', 'numpy'])",
         "_calc_pkg = types.ModuleType('calculator')",
         "_calc_pkg.__path__ = []",
         "sys.modules['calculator'] = _calc_pkg",
