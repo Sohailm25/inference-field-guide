@@ -51,17 +51,17 @@ def _pricing(Path, yaml, LCPRCalculator):
 def _theme_css(mo, Path):
     """Inject palette + typography (moss/oxblood + Newsreader/JBMono).
     Loads marimo-theme.css from the static/ directory so the Marimo chrome
-    inherits the book design.
+    inherits the book design. Returned as the cell's output so Marimo's
+    render pipeline emits the <style> block into the page DOM.
     """
     _css_path = Path(__file__).parent / "static" / "marimo-theme.css"
     _css_text = _css_path.read_text() if _css_path.exists() else ""
-    mo.Html(f"""
+    return mo.Html(f"""
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href='https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap' rel='stylesheet'>
     <style>{_css_text}</style>
     """)
-    return
 
 
 # ── Landing view (Task 5) ──
@@ -158,23 +158,26 @@ def _compare(mo, go, workload_dd, results, MARIMO_VIEW_META, MarimoView):
         }
 
         _fig = go.Figure()
-        for r in _sorted_results:
+        # Reverse so lowest LCPR is at the top of the chart (cheapest first).
+        for r in reversed(_sorted_results):
             _fig.add_bar(
-                x=[f"{r.provider_name} · {r.deployment_mode}"],
-                y=[r.lcpr],
+                x=[r.lcpr],
+                y=[f"{r.provider_name} · {r.deployment_mode}"],
+                orientation="h",
                 marker_color=_deploy_color.get(r.deployment_mode, "#3A4F2A"),
                 showlegend=False,
-                hovertemplate=f"<b>{r.provider_name}</b><br>LCPR: $%{{y:.4f}}<extra>{r.deployment_mode}</extra>",
+                hovertemplate=f"<b>{r.provider_name}</b><br>LCPR: $%{{x:.4f}}<extra>{r.deployment_mode}</extra>",
             )
         _fig.update_layout(
             plot_bgcolor="#faf5e9",
             paper_bgcolor="#faf5e9",
             font_family="Newsreader, Iowan Old Style, Georgia, serif",
             font_color="#1a1a1a",
-            xaxis=dict(gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11)),
-            yaxis=dict(title="LCPR ($)", gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11)),
-            margin=dict(t=10, b=40, l=60, r=20),
-            height=400,
+            xaxis=dict(title="LCPR ($)", gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11)),
+            yaxis=dict(gridcolor="#e0d8c0", tickfont=dict(family="JetBrains Mono", size=11), automargin=True),
+            margin=dict(t=10, b=40, l=20, r=20),
+            height=max(360, 22 * len(_sorted_results)),
+            bargap=min(0.25, 0.5 / max(2, len(_sorted_results))),
         )
 
         # Prose verdict above the chart. WorkloadProfile has no .name attribute,
