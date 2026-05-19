@@ -4,6 +4,67 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
+from typing import NamedTuple
+
+
+# ABOUTME: 7-view enumeration for the new Marimo app — replaces the 13-tab
+# ABOUTME: Streamlit split. See spec §9.1 and Appendix B decision 16.
+
+
+class MarimoView(str, Enum):
+    LANDING = "landing"
+    COMPARE = "compare"
+    SENSITIVITY = "sensitivity"
+    BREAK_EVEN = "break-even"
+    GOODPUT = "goodput"
+    TRACE_TO_MARGIN = "trace-to-margin"
+    ADVANCED = "advanced"
+
+
+class ViewMeta(NamedTuple):
+    label: str
+    description: str
+    replaces: tuple[str, ...]  # which Streamlit tab(s) this replaces
+
+
+MARIMO_VIEW_META: dict[MarimoView, ViewMeta] = {
+    MarimoView.LANDING: ViewMeta(
+        label="Landing",
+        description="Mad-libs sentence wired to a default workload; verdict paragraph below.",
+        replaces=("Start Here",),
+    ),
+    MarimoView.COMPARE: ViewMeta(
+        label="Compare",
+        description="LCPR comparison across providers for the current workload.",
+        replaces=("Compare",),
+    ),
+    MarimoView.SENSITIVITY: ViewMeta(
+        label="Sensitivity",
+        description="How LCPR moves as one parameter sweeps a range.",
+        replaces=("Sensitivity",),
+    ),
+    MarimoView.BREAK_EVEN: ViewMeta(
+        label="Break-Even",
+        description="Daily output volume where dedicated capacity beats serverless.",
+        replaces=("Break-Even",),
+    ),
+    MarimoView.GOODPUT: ViewMeta(
+        label="Goodput",
+        description="Accepted requests per second under latency + quality SLOs (Derivation 5).",
+        replaces=("Goodput",),
+    ),
+    MarimoView.TRACE_TO_MARGIN: ViewMeta(
+        label="Trace-to-Margin",
+        description="Reconcile raw traces to invoice + revenue (Derivation 6).",
+        replaces=("Trace-to-Margin",),
+    ),
+    MarimoView.ADVANCED: ViewMeta(
+        label="Advanced",
+        description="Cache Gate · KV Capacity · Migration · RouteFit · Trace Schema · Snapshots · Operations.",
+        replaces=("Migration", "Cache Gate", "KV Capacity", "RouteFit", "Trace Schema", "Snapshots", "Operations"),
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -263,3 +324,17 @@ def registry_rows() -> list[dict[str, str]]:
         }
         for view in VIEW_REGISTRY
     ]
+
+
+# ABOUTME: Human-readable labels for snake_case parameter names. Used by
+# ABOUTME: the Sensitivity view to label its parameter selectbox. See spec §9.1 step 6.
+
+PARAM_LABELS: dict[str, str] = {
+    "retry_rate": "Retry rate",
+    "quality_gate_pass_rate": "Quality gate pass rate",
+    "cache_hit_rate": "Cache hit rate",
+    "batch_eligible_fraction": "Batch-eligible fraction",
+    "monthly_requests": "Monthly requests",
+    "avg_input_tokens": "Avg input tokens",
+    "avg_output_tokens": "Avg output tokens",
+}

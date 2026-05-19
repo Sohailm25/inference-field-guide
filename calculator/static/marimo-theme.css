@@ -1,0 +1,148 @@
+/* ABOUTME: Moss + oxblood Marimo theme. Loaded inside the Marimo app via mo.Html(). */
+/* ABOUTME: Suppresses Marimo's default chrome and applies book typography. */
+
+:root {
+  --paper:    #faf5e9;
+  --paper-tint: #f7f1e2;
+  --ink:      #3A4F2A;
+  --ink-soft: #a3ad8a;
+  --brown:    #5C2A1E;
+  --brown-soft: #b39a90;
+  --text:     #1a1a1a;
+  --text-deck: #4a4a4a;
+  --text-mute: #8a8a8a;
+}
+
+/* ── Page background + body type ── */
+body, .marimo-body, [data-testid="stApp"] {
+  background: var(--paper) !important;
+  color: var(--text) !important;
+  font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif !important;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* ── Hide Marimo's edit chrome in published WASM view ── */
+.marimo-run-button,
+.marimo-edit-toolbar,
+.marimo-cell-edit-mode,
+.marimo-app-controls { display: none !important; }
+
+/* ── Headings — moss ── */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--ink) !important;
+  font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif !important;
+}
+h1 { letter-spacing: -0.015em; }
+
+/* ── Inline + display monospace data (numerics) ── */
+code, pre, kbd, samp,
+.var-chip, .book-data-row, .book-data-strong {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace !important;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+/* ── Links — body text with oxblood underline; hover swaps to oxblood ── */
+a {
+  color: var(--text) !important;
+  text-decoration: underline;
+  text-decoration-color: var(--brown-soft);
+  text-underline-offset: 0.18em;
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+a:hover {
+  color: var(--brown) !important;
+  text-decoration-color: var(--brown);
+}
+
+/* ── Buttons — moss outlined, mono ── */
+button, .marimo-button, [data-testid="stButton"] button {
+  background: var(--paper) !important;
+  border: 1px solid var(--ink) !important;
+  color: var(--ink) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.85rem !important;
+  padding: 0.4em 0.9em !important;
+  border-radius: 2px !important;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+button:hover, .marimo-button:hover {
+  background: var(--ink) !important;
+  color: var(--paper) !important;
+}
+
+/* ── Inputs — moss-bordered, mono ── */
+input, select, textarea, .marimo-input,
+input[type="number"], input[type="text"] {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.85rem !important;
+  background: var(--paper) !important;
+  border: 1px solid var(--ink) !important;
+  color: var(--text) !important;
+  border-radius: 2px !important;
+  padding: 0.3em 0.6em !important;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--ink-soft) !important;
+  outline-offset: 1px;
+}
+
+/* ── Sliders — moss accent ── */
+input[type="range"] { accent-color: var(--ink) !important; }
+
+/* ── Dropdowns — moss accent ── */
+select { accent-color: var(--ink) !important; }
+
+/* ── Tables — moss header on cream ── */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 0.92rem;
+}
+th, td {
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid var(--ink-soft);
+}
+th {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  background: var(--paper-tint);
+}
+
+/* ── Accordion / details — restrained ── */
+details, .marimo-accordion {
+  border: 1px solid var(--ink-soft);
+  border-radius: 2px;
+  background: var(--paper-tint);
+  margin: 0.5em 0;
+}
+summary {
+  cursor: pointer;
+  padding: 0.5em 0.75em;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── Tabs (mo.ui.tabs) — moss underline on active ── */
+.marimo-tabs [role="tab"] {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.85rem !important;
+  color: var(--text-deck) !important;
+  background: transparent !important;
+  border-bottom: 2px solid transparent !important;
+  padding: 0.5em 1em !important;
+}
+.marimo-tabs [role="tab"][aria-selected="true"] {
+  color: var(--ink) !important;
+  border-bottom-color: var(--ink) !important;
+}
+</content>
+</invoke>
