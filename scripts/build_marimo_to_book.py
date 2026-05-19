@@ -74,6 +74,16 @@ def main() -> int:
     # walker (in book repo's pelicanconf.py:35-42) picks the files up as static
     # content. Pelican's CI uses DELETE_OUTPUT_DIRECTORY=True so committing
     # directly to output/ would be wiped on every build.
+    # Marimo's WASM export bundles a few files we don't want shipped:
+    # - CLAUDE.md: Marimo's AI-assistant prompt; Pelican tries to render it
+    #   as a Markdown article and warns. Strip before copy.
+    junk = ["CLAUDE.md"]
+    for name in junk:
+        p = build_dir / name
+        if p.exists():
+            p.unlink()
+            print(f"  removed Marimo bundle junk: {name}")
+
     target = book_repo / "content" / "extra" / "book" / "calculator"
     print(f"[3/4] Copying {build_dir}/ -> {target}/")
     if target.exists():
