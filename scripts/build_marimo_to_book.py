@@ -41,7 +41,7 @@ def main() -> int:
     # filesystem, so `from calculator.X import Y` fails. Run the bundler first
     # to produce a self-contained file that inlines the calculator package
     # + provider_pricing.yaml + marimo-theme.css.
-    print("[1/4] Bundling calculator package into marimo_app_wasm.py")
+    print("[1/5] Bundling calculator package into marimo_app_wasm.py")
     res = subprocess.run(
         ["python3", "scripts/bundle_marimo_for_wasm.py"],
         capture_output=True,
@@ -53,7 +53,7 @@ def main() -> int:
     print(f"  OK: {res.stdout.strip().splitlines()[-1]}")
 
     wasm_src = "calculator/marimo_app_wasm.py"
-    print(f"[2/4] Building Marimo WASM from {wasm_src} -> {build_dir}/")
+    print(f"[2/5] Building Marimo WASM from {wasm_src} -> {build_dir}/")
     res = subprocess.run(
         [args.venv_marimo, "export", "html-wasm", wasm_src, "-o", str(build_dir)],
         capture_output=True,
@@ -85,14 +85,42 @@ def main() -> int:
             print(f"  removed Marimo bundle junk: {name}")
 
     target = book_repo / "content" / "extra" / "book" / "calculator"
-    print(f"[3/4] Copying {build_dir}/ -> {target}/")
+    print(f"[3/5] Copying {build_dir}/ -> {target}/")
     if target.exists():
         shutil.rmtree(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(build_dir, target)
     print("  OK")
 
-    print("[4/4] Done.")
+    # Marimo's exported index.html preloads Lora + PTSans + FiraMono, but we
+    # want the calculator to render in Newsreader + Instrument Serif + JBMono
+    # (the book design fonts). Without this, the page paints in Lora on first
+    # load and then visibly swaps when the theme CSS triggers the Google Fonts
+    # fetch — a FOUT. Inject the Google Fonts stylesheet into the bundle's
+    # <head> so the right fonts load on first paint.
+    print("[4/5] Injecting site Google Fonts into bundle's index.html")
+    idx = target / "index.html"
+    if idx.exists():
+        html = idx.read_text()
+        if "fonts.googleapis.com" not in html:
+            site_fonts = (
+                '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+                '    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
+                '    <link rel="stylesheet" '
+                'href="https://fonts.googleapis.com/css2?'
+                'family=Instrument+Serif:ital@0;1&'
+                'family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,700&'
+                'family=JetBrains+Mono:wght@400;500;600;700&display=swap">\n  '
+            )
+            html = html.replace("</head>", site_fonts + "</head>", 1)
+            idx.write_text(html)
+            print("  OK: site fonts injected")
+        else:
+            print("  SKIP: index.html already references fonts.googleapis.com")
+    else:
+        print(f"  WARN: {idx} not found; skipping font injection")
+
+    print("[5/5] Done.")
     print(f"  Calculator copied to: {target}/")
     print("  Next:")
     print(f"    cd {book_repo}")
