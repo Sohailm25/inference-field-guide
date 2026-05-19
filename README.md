@@ -29,7 +29,7 @@ The Loaded Cost Per Result (LCPR) calculator computes true cost per accepted wor
 .venv/bin/python scripts/build_marimo_to_book.py  # WASM build + copy to book repo
 ```
 
-**Legacy (Streamlit, deprecated):** `inference-econ.streamlit.app` now serves a redirect page pointing at the new URL. The legacy app source survives at `calculator/app.py.LEGACY` for reference.
+**Legacy note:** The previous Streamlit app at `inference-econ.streamlit.app` has been retired. The calculator is Marimo-only now, served from `sohailmo.ai`.
 
 **7 views** (collapsed from the legacy 13-tab Streamlit app):
 
