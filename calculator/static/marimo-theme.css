@@ -1,79 +1,188 @@
-/* ABOUTME: Moss + oxblood Marimo theme. Loaded inside the Marimo app via mo.Html(). */
-/* ABOUTME: Suppresses Marimo's default chrome and applies book typography. */
+/* ABOUTME: Marimo 0.23 theme override — moss + oxblood, Newsreader body.
+   ABOUTME: Selectors target Marimo's actual custom-element + Radix DOM. */
 
 :root {
-  --paper:    #faf5e9;
+  --paper:      #faf5e9;
   --paper-tint: #f7f1e2;
-  --ink:      #3A4F2A;
-  --ink-soft: #a3ad8a;
-  --brown:    #5C2A1E;
+  --ink:        #3A4F2A;
+  --ink-soft:   #a3ad8a;
+  --brown:      #5C2A1E;
   --brown-soft: #b39a90;
-  --text:     #1a1a1a;
-  --text-deck: #4a4a4a;
-  --text-mute: #8a8a8a;
+  --text:       #1a1a1a;
+  --text-deck:  #4a4a4a;
+  --text-mute:  #8a8a8a;
+  /* Override Marimo's medium-width column to the book's reading measure */
+  --content-width-medium: 88ch;
 }
 
-/* ── Page background + body type ── */
-body, .marimo-body, [data-testid="stApp"] {
-  background: var(--paper) !important;
+/* ── Page background + body type ─────────────── */
+html, body { background: var(--paper) !important; }
+body {
   color: var(--text) !important;
   font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif !important;
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
 
-/* ── Hide Marimo's edit chrome in published WASM view ── */
-.marimo-run-button,
-.marimo-edit-toolbar,
-.marimo-cell-edit-mode,
-.marimo-app-controls { display: none !important; }
+/* ── Hide Marimo branding + run-or-edit banner ─ */
+[data-testid="watermark"],
+[data-testid="static-notebook-banner"],
+[data-testid="static-notebook-dialog-trigger"] {
+  display: none !important;
+}
 
-/* ── Headings — moss ── */
+/* ── Headings — moss ───────────────────────────── */
 h1, h2, h3, h4, h5, h6 {
   color: var(--ink) !important;
   font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif !important;
+  letter-spacing: -0.01em;
 }
-h1 { letter-spacing: -0.015em; }
 
-/* ── Inline + display monospace data (numerics) ── */
-code, pre, kbd, samp,
-.var-chip, .book-data-row, .book-data-strong {
+/* ── Inline code / monospace data ──────────────── */
+code, pre, kbd, samp {
   font-family: 'JetBrains Mono', 'SF Mono', monospace !important;
   font-variant-numeric: tabular-nums slashed-zero;
 }
+code {
+  background: var(--paper-tint);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+  font-size: 0.92em;
+}
 
-/* ── Links — body text with oxblood underline; hover swaps to oxblood ── */
+/* ── Links — body color, moss-soft underline ────── */
 a {
   color: var(--text) !important;
   text-decoration: underline;
-  text-decoration-color: var(--brown-soft);
+  text-decoration-color: var(--ink-soft);
   text-underline-offset: 0.18em;
-  transition: color 0.15s, text-decoration-color 0.15s;
 }
-a:hover {
-  color: var(--brown) !important;
-  text-decoration-color: var(--brown);
-}
+a:hover { color: var(--brown) !important; text-decoration-color: var(--brown); }
 
-/* ── Buttons — moss outlined, mono ── */
-button, .marimo-button, [data-testid="stButton"] button {
+/* ── Dropdown (Radix Select via custom element) ── */
+marimo-dropdown [role="combobox"] {
   background: var(--paper) !important;
   border: 1px solid var(--ink) !important;
-  color: var(--ink) !important;
+  color: var(--text) !important;
   font-family: 'JetBrains Mono', monospace !important;
   font-size: 0.85rem !important;
-  padding: 0.4em 0.9em !important;
+  padding: 0.35em 0.7em !important;
   border-radius: 2px !important;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
 }
-button:hover, .marimo-button:hover {
+marimo-dropdown [role="combobox"][data-state="open"] {
+  outline: 2px solid var(--ink-soft);
+  outline-offset: 1px;
+}
+[role="listbox"] {
+  background: var(--paper) !important;
+  border: 1px solid var(--ink) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.85rem !important;
+  border-radius: 2px !important;
+}
+[role="option"][data-highlighted] { background: var(--paper-tint) !important; color: var(--ink) !important; }
+[role="option"][data-state="checked"] { color: var(--ink) !important; font-weight: 700; }
+
+/* ── Slider (custom element wrapping Radix Slider) ── */
+marimo-slider [data-testid="track"] {
+  background: var(--ink-soft) !important;
+  height: 4px !important;
+  border-radius: 2px !important;
+}
+marimo-slider [data-testid="range"] {
   background: var(--ink) !important;
-  color: var(--paper) !important;
+}
+marimo-slider [role="slider"] {
+  background: var(--ink) !important;
+  border: 2px solid var(--paper) !important;
+  width: 14px !important;
+  height: 14px !important;
+  box-shadow: 0 0 0 1px var(--ink) !important;
 }
 
-/* ── Inputs — moss-bordered, mono ── */
-input, select, textarea, .marimo-input,
-input[type="number"], input[type="text"] {
+/* ── Number input (React-Aria spinbutton) ─────── */
+marimo-number [role="group"] {
+  border: 1px solid var(--ink) !important;
+  border-radius: 2px !important;
+  background: var(--paper) !important;
+}
+marimo-number [role="spinbutton"] {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.85rem !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--text) !important;
+  padding: 0.3em 0.6em !important;
+}
+marimo-number [slot="increment"],
+marimo-number [slot="decrement"] {
+  background: var(--paper-tint) !important;
+  color: var(--ink) !important;
+  border-left: 1px solid var(--ink) !important;
+}
+
+/* ── Tabs (Radix Tabs via custom element) ─────── */
+marimo-tabs [role="tablist"] {
+  border-bottom: 1px solid var(--ink-soft) !important;
+  gap: 0 !important;
+}
+marimo-tabs [role="tab"] {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.78rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  color: var(--text-deck) !important;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  padding: 0.5em 1em !important;
+  margin-bottom: -1px !important;
+}
+marimo-tabs [role="tab"]:hover { color: var(--ink) !important; }
+marimo-tabs [role="tab"][data-state="active"] {
+  color: var(--ink) !important;
+  border-bottom-color: var(--ink) !important;
+  font-weight: 700 !important;
+}
+
+/* ── Accordion (Radix Accordion via custom element) ── */
+marimo-accordion {
+  border-top: 1px solid var(--ink-soft) !important;
+  border-bottom: 1px solid var(--ink-soft) !important;
+  margin: 0.5em 0 !important;
+  background: transparent !important;
+}
+marimo-accordion h3,
+marimo-accordion button {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.85rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  color: var(--ink) !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0.5em 0 !important;
+  cursor: pointer !important;
+  text-align: left !important;
+}
+marimo-accordion [role="region"] {
+  padding: 0.5em 0 !important;
+}
+
+/* ── Switch (mo.ui.switch via Radix Switch) ───── */
+marimo-switch [role="switch"] {
+  background: var(--ink-soft) !important;
+  border: 1px solid var(--ink) !important;
+}
+marimo-switch [role="switch"][data-state="checked"] {
+  background: var(--ink) !important;
+}
+marimo-switch [role="switch"] [data-state] {
+  background: var(--paper) !important;
+}
+
+/* ── Text input fallback (mo.ui.text, generic <input type="text">) ── */
+marimo-text input,
+input[type="text"]:not([role="spinbutton"]):not([role="combobox"]) {
   font-family: 'JetBrains Mono', monospace !important;
   font-size: 0.85rem !important;
   background: var(--paper) !important;
@@ -82,67 +191,39 @@ input[type="number"], input[type="text"] {
   border-radius: 2px !important;
   padding: 0.3em 0.6em !important;
 }
-input:focus, select:focus, textarea:focus {
+
+/* ── Focus rings (keyboard nav) — moss-soft outline ── */
+:focus-visible {
   outline: 2px solid var(--ink-soft) !important;
-  outline-offset: 1px;
+  outline-offset: 2px !important;
+  border-radius: 2px;
+}
+[role="tab"]:focus-visible,
+[role="option"]:focus-visible {
+  outline-offset: -2px !important;
 }
 
-/* ── Sliders — moss accent ── */
-input[type="range"] { accent-color: var(--ink) !important; }
-
-/* ── Dropdowns — moss accent ── */
-select { accent-color: var(--ink) !important; }
-
-/* ── Tables — moss header on cream ── */
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-family: 'Newsreader', Georgia, serif;
-  font-size: 0.92rem;
+/* ── Plotly chart modebar (the toolbar that appears on hover) ── */
+.modebar {
+  background: var(--paper-tint) !important;
+  border: 1px solid var(--ink-soft) !important;
+  border-radius: 2px !important;
 }
-th, td {
-  padding: 0.4rem 0.6rem;
-  text-align: left;
-  border-bottom: 1px solid var(--ink-soft);
-}
+.modebar-btn path { fill: var(--text-deck) !important; }
+.modebar-btn:hover path { fill: var(--ink) !important; }
+.modebar-btn.active path { fill: var(--brown) !important; }
+
+/* ── Tables (data) ─────────────────────────────── */
+table { border-collapse: collapse; width: 100%; font-family: 'Newsreader', Georgia, serif; font-size: 0.92rem; }
+th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid var(--ink-soft); }
 th {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ink);
   background: var(--paper-tint);
 }
 
-/* ── Accordion / details — restrained ── */
-details, .marimo-accordion {
-  border: 1px solid var(--ink-soft);
-  border-radius: 2px;
-  background: var(--paper-tint);
-  margin: 0.5em 0;
-}
-summary {
-  cursor: pointer;
-  padding: 0.5em 0.75em;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.85rem;
-  color: var(--ink);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-/* ── Tabs (mo.ui.tabs) — moss underline on active ── */
-.marimo-tabs [role="tab"] {
-  font-family: 'JetBrains Mono', monospace !important;
-  font-size: 0.85rem !important;
-  color: var(--text-deck) !important;
-  background: transparent !important;
-  border-bottom: 2px solid transparent !important;
-  padding: 0.5em 1em !important;
-}
-.marimo-tabs [role="tab"][aria-selected="true"] {
-  color: var(--ink) !important;
-  border-bottom-color: var(--ink) !important;
-}
-</content>
-</invoke>
+/* ── Cell column width — match book reading measure ── */
+.marimo-cell { max-width: inherit; }
