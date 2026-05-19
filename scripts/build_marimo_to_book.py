@@ -37,9 +37,25 @@ def main() -> int:
         shutil.rmtree(build_dir)
     build_dir.mkdir()
 
-    print(f"[1/3] Building Marimo app: {args.marimo_app} -> {build_dir}/")
+    # Marimo's WASM runtime (Pyodide) doesn't have access to the local
+    # filesystem, so `from calculator.X import Y` fails. Run the bundler first
+    # to produce a self-contained file that inlines the calculator package
+    # + provider_pricing.yaml + marimo-theme.css.
+    print("[1/4] Bundling calculator package into marimo_app_wasm.py")
     res = subprocess.run(
-        [args.venv_marimo, "export", "html-wasm", args.marimo_app, "-o", str(build_dir)],
+        ["python3", "scripts/bundle_marimo_for_wasm.py"],
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        print(f"BUNDLE FAILED:\nstdout:\n{res.stdout}\nstderr:\n{res.stderr}")
+        return 1
+    print(f"  OK: {res.stdout.strip().splitlines()[-1]}")
+
+    wasm_src = "calculator/marimo_app_wasm.py"
+    print(f"[2/4] Building Marimo WASM from {wasm_src} -> {build_dir}/")
+    res = subprocess.run(
+        [args.venv_marimo, "export", "html-wasm", wasm_src, "-o", str(build_dir)],
         capture_output=True,
         text=True,
     )
@@ -59,14 +75,14 @@ def main() -> int:
     # content. Pelican's CI uses DELETE_OUTPUT_DIRECTORY=True so committing
     # directly to output/ would be wiped on every build.
     target = book_repo / "content" / "extra" / "book" / "calculator"
-    print(f"[2/3] Copying {build_dir}/ -> {target}/")
+    print(f"[3/4] Copying {build_dir}/ -> {target}/")
     if target.exists():
         shutil.rmtree(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(build_dir, target)
     print("  OK")
 
-    print("[3/3] Done.")
+    print("[4/4] Done.")
     print(f"  Calculator copied to: {target}/")
     print("  Next:")
     print(f"    cd {book_repo}")

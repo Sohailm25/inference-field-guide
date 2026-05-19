@@ -36,3 +36,4 @@ uv.lock
 calculator/.tldr/
 history/.tmp/
 marimo-build/
+calculator/marimo_app_wasm.py
